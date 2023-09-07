@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "zynq-gpu"
+version = "0.1.0"
+description = ""
+authors = ["natanbc <natanbc@users.noreply.github.com>"]
+readme = "README.md"
+packages = [{include = "zynq_gpu"}]
+
+[tool.poetry.dependencies]
+python = ">=3.8,<4.0"
+
+amaranth = { git = "https://github.com/amaranth-lang/amaranth.git", rev="f135226a79fddf5caf894030ac7f49995774c3a7" }
+amaranth-boards = { git = "https://github.com/amaranth-lang/amaranth-boards", rev = "510c28e3799aeca1cbf72ba26771d0951f98412e" }
+amaranth-soc = { git = "https://github.com/amaranth-lang/amaranth-soc", rev = "d2ca157d755aab28bacb5f0b41759d4906cfff41" }
+amaranth-stdio = { git = "https://github.com/amaranth-lang/amaranth-stdio", rev = "d3e141d8c71c45d849272088b9495087a346dbb6" }
+amaranth-yosys = "0.25.0.0.post74"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
