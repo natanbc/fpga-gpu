@@ -181,9 +181,10 @@ def ps7_assigns(interface, port_type: str, idx: int) -> dict:
     }[port_type.lower()]
     if not isinstance(idx, int) or idx < 0 or idx >= count:
         raise ValueError(f"Port index must be in range [0, {count})")
+    idx_str = str(idx) if port_type.lower() != "saxiacp" else ""
     reasons = []
     if not sig.is_compliant(interface, reasons=reasons):
         reasons_as_string = "".join("\n- " + reason for reason in reasons)
         raise ValueError(f"{interface!r} does not match the port signature:" +
                          reasons_as_string)
-    return _map_axi_names(f"{port_type.upper()}{idx}", interface)
+    return _map_axi_names(f"{port_type.upper()}{idx_str}", interface)
