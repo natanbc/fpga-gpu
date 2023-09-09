@@ -19,7 +19,8 @@ class TMDSSerializer(Elaboratable):
         m = Module()
 
         ce = Signal()
-        m.d.comb += ce.eq(~ResetSignal(self._pix_domain))
+        # m.d.comb += ce.eq(~ResetSignal(self._pix_domain))
+        m.d.comb += ce.eq(1)
         shift = Signal(2)
 
         m.submodules.serializer1 = Instance(
