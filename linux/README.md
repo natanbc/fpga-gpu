@@ -1,5 +1,8 @@
 # Setup
 
+Follow the steps [here](https://github.com/xjtuecho/EBAZ4205#reset-the-root-password-of-built-in-linux)
+to change the root password.
+
 1) Copy the command line from the device
 ```
 root@zedboard-zynq7:~# cat /proc/cmdline
@@ -13,7 +16,7 @@ chosen {
 ```
 3) Compile the modified DTB
 ```
-you@your-machine:~$ dtc -I dts -O dtb -o gpu_device_tree.dtb gpu_device_tree.dts
+you@your-machine:~$ make gpu_device_tree.dtb
 ```
 4) Copy `gpu_device_tree.dtb` to the device
 5) Check which NAND partition has the device tree:
