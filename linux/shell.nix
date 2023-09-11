@@ -21,6 +21,7 @@ pkgs.mkShell {
         llvm.bintools-unwrapped
         ncurses
         rustup
+        ubootTools
     ];
 
     shellHook = ''
@@ -34,7 +35,10 @@ pkgs.mkShell {
             make ARCH=arm KCONFIG_CONFIG="$cfg"                             \
                 CC="clang -target arm-linux-gnueabihf" LD=ld.lld AR=llvm-ar \
                 NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump        \
-                READELF=llvm-readelf STRIP=llvm-strip -j$(nproc) "$@"
+                READELF=llvm-readelf STRIP=llvm-strip -j$(nproc) "$@"       \
+                && \
+                mkimage -A arm -O linux -T kernel -C none -a 008000         \
+                -e 008000 -n Linux -d arch/arm/boot/zImage uboot.img
         }
     '';
 }
