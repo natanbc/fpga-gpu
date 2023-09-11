@@ -11,13 +11,30 @@ let
 in
 pkgs.mkShell {
     nativeBuildInputs = with pkgs; [
+        bc
+        bison
         cacert
         dtc
+        flex
+        gnumake
+        llvm.clang-unwrapped
+        llvm.bintools-unwrapped
+        ncurses
         rustup
     ];
 
     shellHook = ''
         rustup toolchain install ${rustVersion} --component cargo --component rustc --component rust-src
         export TOOLCHAIN=${rustVersion}
+
+        build_kernel() {
+            [ ! -r "$1" ] && echo "Usage: build_kernel <config> [make args]" && return 1
+            cfg="$1"
+            shift
+            make ARCH=arm KCONFIG_CONFIG="$cfg"                             \
+                CC="clang -target arm-linux-gnueabihf" LD=ld.lld AR=llvm-ar \
+                NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump        \
+                READELF=llvm-readelf STRIP=llvm-strip -j$(nproc) "$@"
+        }
     '';
 }
