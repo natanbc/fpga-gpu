@@ -38,7 +38,7 @@ pkgs.mkShell {
                 READELF=llvm-readelf STRIP=llvm-strip -j$(nproc) "$@"       \
                 && \
                 mkimage -A arm -O linux -T kernel -C none -a 008000         \
-                -e 008000 -n Linux -d arch/arm/boot/zImage uboot.img
+                -e 008000 -n Linux -d arch/arm/boot/zImage kernel.img
         }
     '';
 }
