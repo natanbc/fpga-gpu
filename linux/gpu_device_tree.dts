@@ -271,23 +271,25 @@
 		};
 
 		memory-controller@e000e000 {
-			#address-cells = <0x01>;
+		    status = "okay";
+			#address-cells = <0x02>;
 			#size-cells = <0x01>;
-			status = "okay";
-			clock-names = "memclk\0aclk";
+			clock-names = "memclk\0apb_pclk";
 			clocks = <0x01 0x0b 0x01 0x2c>;
-			compatible = "arm,pl353-smc-r2p1";
+			compatible = "arm,pl353-smc-r2p1", "arm,primecell";
+			arm,primecell-periphid = <0x00041353>;
 			interrupt-parent = <0x03>;
 			interrupts = <0x00 0x12 0x04>;
-			ranges;
 			reg = <0xe000e000 0x1000>;
+			ranges = <0x0 0x0 0xe1000000 0x1000000>; /* Nand CS region */
 
-			flash@e1000000 {
-				status = "okay";
+			nand0: nand-controller@0,0 {
+			    status = "okay";
+
 				compatible = "arm,pl353-nand-r2p1";
-				reg = <0xe1000000 0x1000000>;
+				reg = <0 0 0x1000000>;
 				#address-cells = <0x01>;
-				#size-cells = <0x01>;
+				#size-cells = <0x00>;
 				arm,nand-cycle-t0 = <0x05>;
 				arm,nand-cycle-t1 = <0x05>;
 				arm,nand-cycle-t2 = <0x02>;
@@ -296,58 +298,69 @@
 				arm,nand-cycle-t5 = <0x01>;
 				arm,nand-cycle-t6 = <0x02>;
 
-				partition@nand-fsbl-uboot {
-					label = "nand-fsbl-uboot";
-					reg = <0x00 0x300000>;
-				};
+				cs-gpios = <0>;
+				nand@0 {
+			        status = "okay";
+				    reg = <0>;
+                    arm,nand-cycle-t0 = <0x05>;
+                    arm,nand-cycle-t1 = <0x05>;
+                    arm,nand-cycle-t2 = <0x02>;
+                    arm,nand-cycle-t3 = <0x02>;
+                    arm,nand-cycle-t4 = <0x02>;
+                    arm,nand-cycle-t5 = <0x01>;
+                    arm,nand-cycle-t6 = <0x02>;
 
-				partition@nand-linux {
-					label = "nand-linux";
-					reg = <0x300000 0x500000>;
-				};
+                    partitions {
+                        compatible = "fixed-partitions";
+                        #address-cells = <1>;
+                        #size-cells = <1>;
 
-				partition@nand-device-tree {
-					label = "nand-device-tree";
-					reg = <0x800000 0x20000>;
-				};
+                        partition@0 {
+                            label = "nand-fsbl-uboot";
+                            reg = <0x00 0x300000>;
+                        };
 
-				partition@nand-rootfs {
-					label = "nand-rootfs";
-					reg = <0x820000 0xa00000>;
-				};
+                        partition@300000 {
+                            label = "nand-linux";
+                            reg = <0x300000 0x500000>;
+                        };
 
-				partition@nand-jffs2 {
-					label = "nand-jffs2";
-					reg = <0x1220000 0x1000000>;
-				};
+                        partition@800000 {
+                            label = "nand-device-tree";
+                            reg = <0x800000 0x20000>;
+                        };
 
-				partition@nand-bitstream {
-					label = "nand-bitstream";
-					reg = <0x2220000 0x800000>;
-				};
+                        partition@820000 {
+                            label = "nand-rootfs";
+                            reg = <0x820000 0xa00000>;
+                        };
 
-				partition@nand-allrootfs {
-					label = "nand-allrootfs";
-					reg = <0x2a20000 0x4000000>;
-				};
+                        partition@1220000 {
+                            label = "nand-jffs2";
+                            reg = <0x1220000 0x1000000>;
+                        };
 
-				partition@nand-release {
-					label = "nand-release";
-					reg = <0x6a20000 0x13e0000>;
-				};
+                        partition@2220000 {
+                            label = "nand-bitstream";
+                            reg = <0x2220000 0x800000>;
+                        };
 
-				partition@nand-reserve {
-					label = "nand-reserve";
-					reg = <0x7e00000 0x200000>;
-				};
-			};
+                        partition@2a20000 {
+                            label = "nand-allrootfs";
+                            reg = <0x2a20000 0x4000000>;
+                        };
 
-			flash@e2000000 {
-				status = "disabled";
-				compatible = "cfi-flash";
-				reg = <0xe2000000 0x2000000>;
-				#address-cells = <0x01>;
-				#size-cells = <0x01>;
+                        partition@6a20000 {
+                            label = "nand-release";
+                            reg = <0x6a20000 0x13e0000>;
+                        };
+
+                        partition@7e00000 {
+                            label = "nand-reserve";
+                            reg = <0x7e00000 0x200000>;
+                        };
+                    };
+                };
 			};
 		};
 
