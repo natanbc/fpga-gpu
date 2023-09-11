@@ -1,5 +1,10 @@
 /dts-v1/;
 
+/* IRQ reference */
+/* https://www.kernel.org/doc/Documentation/devicetree/bindings/interrupt-controller/arm%2Cgic.txt */
+/* https://docs.xilinx.com/r/en-US/ug585-zynq-7000-SoC-TRM/Shared-Peripheral-Interrupts-SPI?tocId=LGXkQnG10uJNPCT_l2ZhDQ */
+/* Subtract 32 from IRQ ID# in UG585 */
+
 / {
 	#address-cells = <0x01>;
 	#size-cells = <0x01>;
