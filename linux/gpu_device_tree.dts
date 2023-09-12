@@ -22,7 +22,7 @@
 		gpuctrl = "/amba_pl/gpuctrl@40000000";
 	};
 
-	memory {
+	memory@0 {
 		device_type = "memory";
 		reg = <0x00 0x10000000>;
 	};
@@ -32,16 +32,15 @@
         #size-cells = <0x01>;
         ranges;
 
-        buffer@69 {
+        vram: buffer@0 {
             no-map;
             reg = <0x4000000 0x2000000>;
-            phandle = <0x05>;
         };
     };
 
-    reserved-driver@69 {
+    reserved-driver {
         compatible = "xlnx,reserved-memory";
-        memory-region = <0x05>;
+        memory-region = <&vram>;
     };
 
 	amba_pl {
@@ -54,7 +53,7 @@
             compatible = "generic-uio";
             reg = <0x40000000 0x40000000>;
             interrupts = <0x00 0x1D 0x01>;
-            interrupt-parent = <0x03>;
+            interrupt-parent = <&intc>;
         };
 	};
 
@@ -66,7 +65,7 @@
 			compatible = "arm,cortex-a9";
 			device_type = "cpu";
 			reg = <0x00>;
-			clocks = <0x01 0x03>;
+			clocks = <&clkc 0x03>;
 			clock-latency = <0x3e8>;
 			cpu0-supply = <0x02>;
 			operating-points = <0xa2c29 0xf4240 0x51614 0xf4240>;
@@ -76,18 +75,18 @@
 			compatible = "arm,cortex-a9";
 			device_type = "cpu";
 			reg = <0x01>;
-			clocks = <0x01 0x03>;
+			clocks = <&clkc 0x03>;
 		};
 	};
 
-	pmu {
+	pmu@f8891000 {
 		compatible = "arm,cortex-a9-pmu";
 		interrupts = <0x00 0x05 0x04 0x00 0x06 0x04>;
-		interrupt-parent = <0x03>;
+		interrupt-parent = <&intc>;
 		reg = <0xf8891000 0x1000 0xf8893000 0x1000>;
 	};
 
-	fixedregulator@0 {
+	fixedregulator {
 		compatible = "regulator-fixed";
 		regulator-name = "VCCPINT";
 		regulator-min-microvolt = <0xf4240>;
@@ -102,25 +101,25 @@
 		compatible = "simple-bus";
 		#address-cells = <0x01>;
 		#size-cells = <0x01>;
-		interrupt-parent = <0x03>;
+		interrupt-parent = <&intc>;
 		ranges;
 
 		adc@f8007100 {
 			compatible = "xlnx,zynq-xadc-1.00.a";
 			reg = <0xf8007100 0x20>;
 			interrupts = <0x00 0x07 0x04>;
-			interrupt-parent = <0x03>;
-			clocks = <0x01 0x0c>;
+			interrupt-parent = <&intc>;
+			clocks = <&clkc 0x0c>;
 		};
 
 		can@e0008000 {
 			compatible = "xlnx,zynq-can-1.0";
 			status = "disabled";
-			clocks = <0x01 0x13 0x01 0x24>;
+			clocks = <&clkc 0x13 &clkc 0x24>;
 			clock-names = "can_clk\0pclk";
 			reg = <0xe0008000 0x1000>;
 			interrupts = <0x00 0x1c 0x04>;
-			interrupt-parent = <0x03>;
+			interrupt-parent = <&intc>;
 			tx-fifo-depth = <0x40>;
 			rx-fifo-depth = <0x40>;
 		};
@@ -128,11 +127,11 @@
 		can@e0009000 {
 			compatible = "xlnx,zynq-can-1.0";
 			status = "disabled";
-			clocks = <0x01 0x14 0x01 0x25>;
+			clocks = <&clkc 0x14 &clkc 0x25>;
 			clock-names = "can_clk\0pclk";
 			reg = <0xe0009000 0x1000>;
 			interrupts = <0x00 0x33 0x04>;
-			interrupt-parent = <0x03>;
+			interrupt-parent = <&intc>;
 			tx-fifo-depth = <0x40>;
 			rx-fifo-depth = <0x40>;
 		};
@@ -140,11 +139,11 @@
 		gpio@e000a000 {
 			compatible = "xlnx,zynq-gpio-1.0";
 			#gpio-cells = <0x02>;
-			clocks = <0x01 0x2a>;
+			clocks = <&clkc 0x2a>;
 			gpio-controller;
 			interrupt-controller;
 			#interrupt-cells = <0x02>;
-			interrupt-parent = <0x03>;
+			interrupt-parent = <&intc>;
 			interrupts = <0x00 0x14 0x04>;
 			reg = <0xe000a000 0x1000>;
 		};
@@ -152,8 +151,8 @@
 		i2c@e0004000 {
 			compatible = "cdns,i2c-r1p10";
 			status = "okay";
-			clocks = <0x01 0x26>;
-			interrupt-parent = <0x03>;
+			clocks = <&clkc 0x26>;
+			interrupt-parent = <&intc>;
 			interrupts = <0x00 0x19 0x04>;
 			reg = <0xe0004000 0x1000>;
 			#address-cells = <0x01>;
@@ -169,23 +168,21 @@
 		i2c@e0005000 {
 			compatible = "cdns,i2c-r1p10";
 			status = "disabled";
-			clocks = <0x01 0x27>;
-			interrupt-parent = <0x03>;
+			clocks = <&clkc 0x27>;
+			interrupt-parent = <&intc>;
 			interrupts = <0x00 0x30 0x04>;
 			reg = <0xe0005000 0x1000>;
 			#address-cells = <0x01>;
 			#size-cells = <0x00>;
 		};
 
-		interrupt-controller@f8f01000 {
+		intc: interrupt-controller@f8f01000 {
 			compatible = "arm,cortex-a9-gic";
 			#interrupt-cells = <0x03>;
 			interrupt-controller;
 			reg = <0xf8f01000 0x1000 0xf8f00100 0x100>;
 			num_cpus = <0x02>;
 			num_interrupts = <0x60>;
-			linux,phandle = <0x03>;
-			phandle = <0x03>;
 		};
 
 		cache-controller@f8f02000 {
@@ -205,7 +202,7 @@
 
 		ocmc@f800c000 {
 			compatible = "xlnx,zynq-ocmc-1.0";
-			interrupt-parent = <0x03>;
+			interrupt-parent = <&intc>;
 			interrupts = <0x00 0x03 0x04>;
 			reg = <0xf800c000 0x1000>;
 		};
@@ -213,7 +210,7 @@
 		serial@e0000000 {
 			compatible = "xlnx,xuartps\0cdns,uart-r1p8";
 			status = "okay";
-			clocks = <0x01 0x17 0x01 0x28>;
+			clocks = <&clkc 0x17 &clkc 0x28>;
 			clock-names = "uart_clk\0pclk";
 			reg = <0xe0000000 0x1000>;
 			interrupts = <0x00 0x1b 0x04>;
@@ -224,7 +221,7 @@
 		serial@e0001000 {
 			compatible = "xlnx,xuartps\0cdns,uart-r1p8";
 			status = "okay";
-			clocks = <0x01 0x18 0x01 0x29>;
+			clocks = <&clkc 0x18 &clkc 0x29>;
 			clock-names = "uart_clk\0pclk";
 			reg = <0xe0001000 0x1000>;
 			interrupts = <0x00 0x32 0x04>;
@@ -236,9 +233,9 @@
 			compatible = "xlnx,zynq-spi-r1p6";
 			reg = <0xe0006000 0x1000>;
 			status = "disabled";
-			interrupt-parent = <0x03>;
+			interrupt-parent = <&intc>;
 			interrupts = <0x00 0x1a 0x04>;
-			clocks = <0x01 0x19 0x01 0x22>;
+			clocks = <&clkc 0x19 &clkc 0x22>;
 			clock-names = "ref_clk\0pclk";
 			#address-cells = <0x01>;
 			#size-cells = <0x00>;
@@ -248,9 +245,9 @@
 			compatible = "xlnx,zynq-spi-r1p6";
 			reg = <0xe0007000 0x1000>;
 			status = "okay";
-			interrupt-parent = <0x03>;
+			interrupt-parent = <&intc>;
 			interrupts = <0x00 0x31 0x04>;
-			clocks = <0x01 0x1a 0x01 0x23>;
+			clocks = <&clkc 0x1a &clkc 0x23>;
 			clock-names = "ref_clk\0pclk";
 			#address-cells = <0x01>;
 			#size-cells = <0x00>;
@@ -260,10 +257,10 @@
 
 		spi@e000d000 {
 			clock-names = "ref_clk\0pclk";
-			clocks = <0x01 0x0a 0x01 0x2b>;
+			clocks = <&clkc 0x0a &clkc 0x2b>;
 			compatible = "xlnx,zynq-qspi-1.0";
 			status = "disabled";
-			interrupt-parent = <0x03>;
+			interrupt-parent = <&intc>;
 			interrupts = <0x00 0x13 0x04>;
 			reg = <0xe000d000 0x1000>;
 			#address-cells = <0x01>;
@@ -275,10 +272,10 @@
 			#address-cells = <0x02>;
 			#size-cells = <0x01>;
 			clock-names = "memclk\0apb_pclk";
-			clocks = <0x01 0x0b 0x01 0x2c>;
+			clocks = <&clkc 0x0b &clkc 0x2c>;
 			compatible = "arm,pl353-smc-r2p1", "arm,primecell";
 			arm,primecell-periphid = <0x00041353>;
-			interrupt-parent = <0x03>;
+			interrupt-parent = <&intc>;
 			interrupts = <0x00 0x12 0x04>;
 			reg = <0xe000e000 0x1000>;
 			ranges = <0x0 0x0 0xe1000000 0x1000000>; /* Nand CS region */
@@ -369,7 +366,7 @@
 			reg = <0xe000b000 0x1000>;
 			status = "okay";
 			interrupts = <0x00 0x16 0x04>;
-			clocks = <0x01 0x1e 0x01 0x1e 0x01 0x0d>;
+			clocks = <&clkc 0x1e &clkc 0x1e &clkc 0x0d>;
 			clock-names = "pclk\0hclk\0tx_clk";
 			#address-cells = <0x01>;
 			#size-cells = <0x00>;
@@ -386,7 +383,7 @@
 			reg = <0xe000c000 0x1000>;
 			status = "disabled";
 			interrupts = <0x00 0x2d 0x04>;
-			clocks = <0x01 0x1f 0x01 0x1f 0x01 0x0e>;
+			clocks = <&clkc 0x1f &clkc 0x1f &clkc 0x0e>;
 			clock-names = "pclk\0hclk\0tx_clk";
 			#address-cells = <0x01>;
 			#size-cells = <0x00>;
@@ -396,8 +393,8 @@
 			compatible = "arasan,sdhci-8.9a";
 			status = "okay";
 			clock-names = "clk_xin\0clk_ahb";
-			clocks = <0x01 0x15 0x01 0x20>;
-			interrupt-parent = <0x03>;
+			clocks = <&clkc 0x15 &clkc 0x20>;
+			interrupt-parent = <&intc>;
 			interrupts = <0x00 0x18 0x04>;
 			reg = <0xe0100000 0x1000>;
 			broken-adma2;
@@ -410,8 +407,8 @@
 			compatible = "arasan,sdhci-8.9a";
 			status = "disabled";
 			clock-names = "clk_xin\0clk_ahb";
-			clocks = <0x01 0x16 0x01 0x21>;
-			interrupt-parent = <0x03>;
+			clocks = <&clkc 0x16 &clkc 0x21>;
+			interrupt-parent = <&intc>;
 			interrupts = <0x00 0x2f 0x04>;
 			reg = <0xe0101000 0x1000>;
 			broken-adma2;
@@ -426,7 +423,7 @@
 			linux,phandle = <0x04>;
 			phandle = <0x04>;
 
-			clkc@100 {
+			clkc: clkc@100 {
 				#clock-cells = <0x01>;
 				compatible = "xlnx,ps7-clkc";
 				fclk-enable = <0x03>;
@@ -454,22 +451,22 @@
 		dmac@f8003000 {
 			compatible = "arm,pl330\0arm,primecell";
 			reg = <0xf8003000 0x1000>;
-			interrupt-parent = <0x03>;
+			interrupt-parent = <&intc>;
 			interrupt-names = "abort\0dma0\0dma1\0dma2\0dma3\0dma4\0dma5\0dma6\0dma7";
 			interrupts = <0x00 0x0d 0x04 0x00 0x0e 0x04 0x00 0x0f 0x04 0x00 0x10 0x04 0x00 0x11 0x04 0x00 0x28 0x04 0x00 0x29 0x04 0x00 0x2a 0x04 0x00 0x2b 0x04>;
 			#dma-cells = <0x01>;
 			#dma-channels = <0x08>;
 			#dma-requests = <0x04>;
-			clocks = <0x01 0x1b>;
+			clocks = <&clkc 0x1b>;
 			clock-names = "apb_pclk";
 		};
 
 		devcfg@f8007000 {
 			compatible = "xlnx,zynq-devcfg-1.0";
-			interrupt-parent = <0x03>;
+			interrupt-parent = <&intc>;
 			interrupts = <0x00 0x08 0x04>;
 			reg = <0xf8007000 0x100>;
-			clocks = <0x01 0x0c 0x01 0x0f 0x01 0x10 0x01 0x11 0x01 0x12>;
+			clocks = <&clkc 0x0c &clkc 0x0f &clkc 0x10 &clkc 0x11 &clkc 0x12>;
 			clock-names = "ref_clk\0fclk0\0fclk1\0fclk2\0fclk3";
 			syscon = <0x04>;
 		};
@@ -483,39 +480,39 @@
 			compatible = "arm,cortex-a9-global-timer";
 			reg = <0xf8f00200 0x20>;
 			interrupts = <0x01 0x0b 0x301>;
-			interrupt-parent = <0x03>;
-			clocks = <0x01 0x04>;
+			interrupt-parent = <&intc>;
+			clocks = <&clkc 0x04>;
 		};
 
 		timer@f8001000 {
-			interrupt-parent = <0x03>;
+			interrupt-parent = <&intc>;
 			interrupts = <0x00 0x0a 0x04 0x00 0x0b 0x04 0x00 0x0c 0x04>;
 			compatible = "cdns,ttc";
-			clocks = <0x01 0x06>;
+			clocks = <&clkc 0x06>;
 			reg = <0xf8001000 0x1000>;
 		};
 
 		timer@f8002000 {
-			interrupt-parent = <0x03>;
+			interrupt-parent = <&intc>;
 			interrupts = <0x00 0x25 0x04 0x00 0x26 0x04 0x00 0x27 0x04>;
 			compatible = "cdns,ttc";
-			clocks = <0x01 0x06>;
+			clocks = <&clkc 0x06>;
 			reg = <0xf8002000 0x1000>;
 		};
 
 		timer@f8f00600 {
-			interrupt-parent = <0x03>;
+			interrupt-parent = <&intc>;
 			interrupts = <0x01 0x0d 0x301>;
 			compatible = "arm,cortex-a9-twd-timer";
 			reg = <0xf8f00600 0x20>;
-			clocks = <0x01 0x04>;
+			clocks = <&clkc 0x04>;
 		};
 
 		usb@e0002000 {
 			compatible = "xlnx,zynq-usb-2.20a\0chipidea,usb2";
 			status = "disabled";
-			clocks = <0x01 0x1c>;
-			interrupt-parent = <0x03>;
+			clocks = <&clkc 0x1c>;
+			interrupt-parent = <&intc>;
 			interrupts = <0x00 0x15 0x04>;
 			reg = <0xe0002000 0x1000>;
 			phy_type = "ulpi";
@@ -524,17 +521,17 @@
 		usb@e0003000 {
 			compatible = "xlnx,zynq-usb-2.20a\0chipidea,usb2";
 			status = "disabled";
-			clocks = <0x01 0x1d>;
-			interrupt-parent = <0x03>;
+			clocks = <&clkc 0x1d>;
+			interrupt-parent = <&intc>;
 			interrupts = <0x00 0x2c 0x04>;
 			reg = <0xe0003000 0x1000>;
 			phy_type = "ulpi";
 		};
 
 		watchdog@f8005000 {
-			clocks = <0x01 0x2d>;
+			clocks = <&clkc 0x2d>;
 			compatible = "cdns,wdt-r1p2";
-			interrupt-parent = <0x03>;
+			interrupt-parent = <&intc>;
 			interrupts = <0x00 0x09 0x01>;
 			reg = <0xf8005000 0x1000>;
 			timeout-sec = <0x0a>;
