@@ -52,7 +52,7 @@
         gpuctrl@40000000 {
             compatible = "generic-uio";
             reg = <0x40000000 0x40000000>;
-            interrupts = <0 29 0x01>;
+            interrupts = <0 29 0x04>;
             interrupt-parent = <&intc>;
         };
     };
@@ -429,7 +429,7 @@
             clkc: clkc@100 {
                 #clock-cells = <0x01>;
                 compatible = "xlnx,ps7-clkc";
-                fclk-enable = <0x3>;
+                fclk-enable = <0xf>;
                 clock-output-names =
                     "armpll",     "ddrpll",     "iopll",      "cpu_6or4x",  "cpu_3or2x",
                     "cpu_2x",     "cpu_1x",     "ddr2x",      "ddr3x",      "dci",
@@ -442,7 +442,7 @@
                     "uart0_aper", "uart1_aper", "gpio_aper",  "lqspi_aper", "smc_aper",
                     "swdt",       "dbg_trc",    "dbg_apb";
                 reg = <0x100 0x100>;
-                ps-clk-frequency = <33333300>;
+                ps-clk-frequency = <33333333>;
                 linux,phandle = <0x01>;
                 phandle = <0x01>;
             };
