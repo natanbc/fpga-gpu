@@ -6,8 +6,8 @@
 /* Subtract 32 from IRQ ID# in UG585 */
 
 / {
-    #address-cells = <0x01>;
-    #size-cells = <0x01>;
+    #address-cells = <1>;
+    #size-cells = <1>;
     compatible = "xlnx,zynq-7000";
 
     chosen {
@@ -28,8 +28,8 @@
     };
 
     reserved-memory {
-        #address-cells = <0x01>;
-        #size-cells = <0x01>;
+        #address-cells = <1>;
+        #size-cells = <1>;
         ranges;
 
         vram: buffer@0 {
@@ -44,8 +44,8 @@
     };
 
     amba_pl {
-        #address-cells = <0x01>;
-        #size-cells = <0x01>;
+        #address-cells = <1>;
+        #size-cells = <1>;
         compatible = "simple-bus";
         ranges;
 
@@ -58,23 +58,23 @@
     };
 
     cpus {
-        #address-cells = <0x01>;
-        #size-cells = <0x00>;
+        #address-cells = <1>;
+        #size-cells = <0>;
 
         cpu@0 {
             compatible = "arm,cortex-a9";
             device_type = "cpu";
-            reg = <0x00>;
+            reg = <0>;
             clocks = <&clkc 3>; /* cpu_6or4x */
             clock-latency = <0x3e8>;
-            cpu0-supply = <0x02>;
+            cpu0-supply = <&vreg>;
             operating-points = <0xa2c29 0xf4240 0x51614 0xf4240>;
         };
 
         cpu@1 {
             compatible = "arm,cortex-a9";
             device_type = "cpu";
-            reg = <0x01>;
+            reg = <1>;
             clocks = <&clkc 3>; /* cpu_6or4x */
         };
     };
@@ -89,21 +89,19 @@
         reg = <0xf8891000 0x1000 0xf8893000 0x1000>;
     };
 
-    fixedregulator {
+    vreg: fixedregulator {
         compatible = "regulator-fixed";
         regulator-name = "VCCPINT";
         regulator-min-microvolt = <0xf4240>;
         regulator-max-microvolt = <0xf4240>;
         regulator-boot-on;
         regulator-always-on;
-        linux,phandle = <0x02>;
-        phandle = <0x02>;
     };
 
     amba {
         compatible = "simple-bus";
-        #address-cells = <0x01>;
-        #size-cells = <0x01>;
+        #address-cells = <1>;
+        #size-cells = <1>;
         interrupt-parent = <&intc>;
         ranges;
 
@@ -141,11 +139,11 @@
 
         gpio@e000a000 {
             compatible = "xlnx,zynq-gpio-1.0";
-            #gpio-cells = <0x02>;
+            #gpio-cells = <2>;
             clocks = <&clkc 42>; /* gpio_aper */
             gpio-controller;
             interrupt-controller;
-            #interrupt-cells = <0x02>;
+            #interrupt-cells = <2>;
             interrupt-parent = <&intc>;
             interrupts = <0 20 0x04>;
             reg = <0xe000a000 0x1000>;
@@ -158,8 +156,8 @@
             interrupt-parent = <&intc>;
             interrupts = <0 25 0x04>;
             reg = <0xe0004000 0x1000>;
-            #address-cells = <0x01>;
-            #size-cells = <0x00>;
+            #address-cells = <1>;
+            #size-cells = <0>;
             clock-frequency = <0x61a80>;
 
             rtc@51 {
@@ -175,13 +173,13 @@
             interrupt-parent = <&intc>;
             interrupts = <0 48 0x04>;
             reg = <0xe0005000 0x1000>;
-            #address-cells = <0x01>;
-            #size-cells = <0x00>;
+            #address-cells = <1>;
+            #size-cells = <0>;
         };
 
         intc: interrupt-controller@f8f01000 {
             compatible = "arm,cortex-a9-gic";
-            #interrupt-cells = <0x03>;
+            #interrupt-cells = <3>;
             interrupt-controller;
             reg = <0xf8f01000 0x1000 0xf8f00100 0x100>;
             num_cpus = <0x02>;
@@ -195,7 +193,7 @@
             arm,data-latency = <0x03 0x02 0x02>;
             arm,tag-latency = <0x02 0x02 0x02>;
             cache-unified;
-            cache-level = <0x02>;
+            cache-level = <2>;
         };
 
         memory-controller@f8006000 {
@@ -218,7 +216,7 @@
             reg = <0xe0000000 0x1000>;
             interrupts = <0 27 0x04>;
             device_type = "serial";
-            port-number = <0x01>;
+            port-number = <1>;
         };
 
         serial@e0001000 {
@@ -229,7 +227,7 @@
             reg = <0xe0001000 0x1000>;
             interrupts = <0 50 0x04>;
             device_type = "serial";
-            port-number = <0x00>;
+            port-number = <0>;
         };
 
         spi@e0006000 {
@@ -240,8 +238,8 @@
             interrupts = <0 26 0x04>;
             clocks = <&clkc 25 &clkc 34>; /* spi0, spi0_aper */
             clock-names = "ref_clk", "pclk";
-            #address-cells = <0x01>;
-            #size-cells = <0x00>;
+            #address-cells = <1>;
+            #size-cells = <0>;
         };
 
         spi@e0007000 {
@@ -252,10 +250,10 @@
             interrupts = <0 49 0x04>;
             clocks = <&clkc 26 &clkc 35>; /* spi1, spi1_aper */
             clock-names = "ref_clk", "pclk";
-            #address-cells = <0x01>;
-            #size-cells = <0x00>;
-            is-decoded-cs = <0x00>;
-            num-cs = <0x02>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+            is-decoded-cs = <0>;
+            num-cs = <2>;
         };
 
         spi@e000d000 {
@@ -266,14 +264,14 @@
             interrupt-parent = <&intc>;
             interrupts = <0 19 0x04>;
             reg = <0xe000d000 0x1000>;
-            #address-cells = <0x01>;
-            #size-cells = <0x00>;
+            #address-cells = <1>;
+            #size-cells = <0>;
         };
 
         memory-controller@e000e000 {
             status = "okay";
-            #address-cells = <0x02>;
-            #size-cells = <0x01>;
+            #address-cells = <2>;
+            #size-cells = <1>;
             clock-names = "memclk", "apb_pclk";
             clocks = <&clkc 11 &clkc 44>; /* smc, smc_aper */
             compatible = "arm,pl353-smc-r2p1", "arm,primecell";
@@ -288,27 +286,27 @@
 
                 compatible = "arm,pl353-nand-r2p1";
                 reg = <0 0 0x1000000>;
-                #address-cells = <0x01>;
-                #size-cells = <0x00>;
-                arm,nand-cycle-t0 = <0x05>;
-                arm,nand-cycle-t1 = <0x05>;
-                arm,nand-cycle-t2 = <0x02>;
-                arm,nand-cycle-t3 = <0x02>;
-                arm,nand-cycle-t4 = <0x02>;
-                arm,nand-cycle-t5 = <0x01>;
-                arm,nand-cycle-t6 = <0x02>;
+                #address-cells = <1>;
+                #size-cells = <0>;
+                arm,nand-cycle-t0 = <5>;
+                arm,nand-cycle-t1 = <5>;
+                arm,nand-cycle-t2 = <2>;
+                arm,nand-cycle-t3 = <2>;
+                arm,nand-cycle-t4 = <2>;
+                arm,nand-cycle-t5 = <1>;
+                arm,nand-cycle-t6 = <2>;
 
                 cs-gpios = <0>;
                 nand@0 {
                     status = "okay";
                     reg = <0>;
-                    arm,nand-cycle-t0 = <0x05>;
-                    arm,nand-cycle-t1 = <0x05>;
-                    arm,nand-cycle-t2 = <0x02>;
-                    arm,nand-cycle-t3 = <0x02>;
-                    arm,nand-cycle-t4 = <0x02>;
-                    arm,nand-cycle-t5 = <0x01>;
-                    arm,nand-cycle-t6 = <0x02>;
+                    arm,nand-cycle-t0 = <5>;
+                    arm,nand-cycle-t1 = <5>;
+                    arm,nand-cycle-t2 = <2>;
+                    arm,nand-cycle-t3 = <2>;
+                    arm,nand-cycle-t4 = <2>;
+                    arm,nand-cycle-t5 = <1>;
+                    arm,nand-cycle-t6 = <2>;
 
                     partitions {
                         compatible = "fixed-partitions";
@@ -371,13 +369,13 @@
             interrupts = <0 22 0x04>;
             clocks = <&clkc 30 &clkc 30 &clkc 13>; /* gem0_aper, gem0_aper, gem0 */
             clock-names = "pclk", "hclk", "tx_clk";
-            #address-cells = <0x01>;
-            #size-cells = <0x00>;
+            #address-cells = <1>;
+            #size-cells = <0>;
             local-mac-address = [00 0a 35 00 00 00];
             phy-mode = "mii";
 
             ethernet-phy@0 {
-                reg = <0x00>;
+                reg = <0>;
             };
         };
 
@@ -388,8 +386,8 @@
             interrupts = <0 45 0x04>;
             clocks = <&clkc 31 &clkc 31 &clkc 14>; /* gem1_aper, gem1_aper, gem1 */
             clock-names = "pclk", "hclk", "tx_clk";
-            #address-cells = <0x01>;
-            #size-cells = <0x00>;
+            #address-cells = <1>;
+            #size-cells = <0>;
         };
 
         sdhci@e0100000 {
@@ -401,9 +399,9 @@
             interrupts = <0 24 0x04>;
             reg = <0xe0100000 0x1000>;
             broken-adma2;
-            xlnx,has-cd = <0x00>;
-            xlnx,has-power = <0x00>;
-            xlnx,has-wp = <0x00>;
+            xlnx,has-cd = <0>;
+            xlnx,has-power = <0>;
+            xlnx,has-wp = <0>;
         };
 
         sdhci@e0101000 {
@@ -417,17 +415,15 @@
             broken-adma2;
         };
 
-        slcr@f8000000 {
-            #address-cells = <0x01>;
-            #size-cells = <0x01>;
+        slcr: slcr@f8000000 {
+            #address-cells = <1>;
+            #size-cells = <1>;
             compatible = "xlnx,zynq-slcr", "syscon", "simple-mfd";
             reg = <0xf8000000 0x1000>;
             ranges;
-            linux,phandle = <0x04>;
-            phandle = <0x04>;
 
             clkc: clkc@100 {
-                #clock-cells = <0x01>;
+                #clock-cells = <1>;
                 compatible = "xlnx,ps7-clkc";
                 fclk-enable = <0xf>;
                 clock-output-names =
@@ -443,21 +439,19 @@
                     "swdt",       "dbg_trc",    "dbg_apb";
                 reg = <0x100 0x100>;
                 ps-clk-frequency = <33333333>;
-                linux,phandle = <0x01>;
-                phandle = <0x01>;
             };
 
             rstc@200 {
                 compatible = "xlnx,zynq-reset";
                 reg = <0x200 0x48>;
-                #reset-cells = <0x01>;
-                syscon = <0x04>;
+                #reset-cells = <1>;
+                syscon = <&slcr>;
             };
 
             pinctrl@700 {
                 compatible = "xlnx,pinctrl-zynq";
                 reg = <0x700 0x200>;
-                syscon = <0x04>;
+                syscon = <&slcr>;
             };
         };
 
@@ -477,9 +471,9 @@
                 0 42 0x04
                 0 43 0x04
             >;
-            #dma-cells = <0x01>;
-            #dma-channels = <0x08>;
-            #dma-requests = <0x04>;
+            #dma-cells = <1>;
+            #dma-channels = <8>;
+            #dma-requests = <4>;
             clocks = <&clkc 27>; /* dma */
             clock-names = "apb_pclk";
         };
@@ -491,7 +485,7 @@
             reg = <0xf8007000 0x100>;
             clocks = <&clkc 12 &clkc 15 &clkc 16 &clkc 17 &clkc 18>; /* pcap, fclk0, fclk1, fclk2, fclk3 */
             clock-names = "ref_clk", "fclk0", "fclk1", "fclk2", "fclk3";
-            syscon = <0x04>;
+            syscon = <&slcr>;
         };
 
         efuse@f800d000 {
@@ -565,7 +559,7 @@
             interrupt-parent = <&intc>;
             interrupts = <0 9 0x01>;
             reg = <0xf8005000 0x1000>;
-            timeout-sec = <0x0a>;
+            timeout-sec = <10>;
             status = "okay";
             reset-on-timeout;
         };
