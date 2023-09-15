@@ -40,5 +40,32 @@ pkgs.mkShell {
                 mkimage -A arm -O linux -T kernel -C none -a 008000         \
                 -e 008000 -n Linux -d arch/arm/boot/zImage kernel.img
         }
+
+        build_module() {
+            [ ! -d "$1" ] && echo "Usage: build_module <kernel src> [kernel config, defaults to <kernel src>/.config] [module dir, defaults to .]" && return 1
+            case "$#" in
+                1)
+                    cfg_arg=""
+                    module="$(pwd)"
+                    ;;
+                2)
+                    cfg_arg="KCONFIG_CONFIG=$2"
+                    module="$(pwd)"
+                    ;;
+                3)
+                    cfg_arg="KCONFIG_CONFIG=$2"
+                    module="$3"
+                    ;;
+                *)
+                    echo "Usage: build_module <kernel src> [kernel config, defaults to <kernel src>/.config] [module dir, defaults to .]"
+                    return 1
+                    ;;
+            esac
+            make ARCH=arm "$cfg_arg"                                        \
+                CC="clang -target arm-linux-gnueabihf" LD=ld.lld AR=llvm-ar \
+                NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump        \
+                READELF=llvm-readelf STRIP=llvm-strip -j$(nproc)            \
+                -C "$1" M="$module"
+        }
     '';
 }

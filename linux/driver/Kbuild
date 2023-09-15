@@ -1,0 +1,2 @@
+obj-m		+= userdma.o
+userdma-y	+= userdma_main.o cont_dma_buf.o
