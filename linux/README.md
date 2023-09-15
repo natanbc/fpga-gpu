@@ -64,3 +64,12 @@ root@zedboard-zynq7:~# flash_erase /dev/mtdUBOOT 0 0
 root@zedboard-zynq7:~# nandwrite -p /dev/mtdUBOOT modified-uboot
 ```
 12) Reboot, and once you're back `/sys/class/uio/uio0` should exist.
+
+# Driver
+
+The `driver` folder includes a small kernel module that allows userspace to allocate contiguous `dma-buf`s,
+and also provides their physical address back. To build this driver, simply run
+```
+you@your-machine:~$ nix-shell --run 'cd driver; build_module ../linux-xlnx ../kernel_config'
+```
+The module can then be loaded with `insmod` on the device.
