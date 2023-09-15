@@ -22,7 +22,7 @@ you@your-machine:~$ make gpu_device_tree.dtb
 ```
 you@your-machine:~$ git clone --depth=1 --branch xilinx-v2023.1 https://github.com/Xilinx/linux-xlnx
                     # Assuming this is ran in this folder
-you@your-machine:~$ nix-shell --run 'cd linux-xlnx; build_kernel ../kernel_config' 
+you@your-machine:~$ nix-shell --run 'cd linux-xlnx; build_kernel --config ../kernel_config' 
 ```
 5) Copy `gpu_device_tree.dtb` and `linux-xlnx/kernel.img` to the device
 6) Check which NAND partition has the device tree and kernel:
@@ -70,6 +70,6 @@ root@zedboard-zynq7:~# nandwrite -p /dev/mtdUBOOT modified-uboot
 The `driver` folder includes a small kernel module that allows userspace to allocate contiguous `dma-buf`s,
 and also provides their physical address back. To build this driver, simply run
 ```
-you@your-machine:~$ nix-shell --run 'cd driver; build_module ../linux-xlnx ../kernel_config'
+you@your-machine:~$ nix-shell --run 'cd driver; build_module --config ../kernel_config --kernel ../linux-xlnx'
 ```
 The module can then be loaded with `insmod` on the device.

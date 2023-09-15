@@ -29,10 +29,13 @@ pkgs.mkShell {
         export TOOLCHAIN=${rustVersion}
 
         build_kernel() {
-            [ ! -r "$1" ] && echo "Usage: build_kernel <config> [make args]" && return 1
-            cfg="$1"
-            shift
-            make ARCH=arm KCONFIG_CONFIG="$cfg"                             \
+            # Usage: build_kernel [--config <kernel config>] [make args]
+            cfg_arg=""
+            if [ "$1" = "--config" ]; then
+                cfg_arg="KCONFIG_CONFIG=$2"
+                shift 2
+            fi
+            make ARCH=arm "$cfg_arg"                                        \
                 CC="clang -target arm-linux-gnueabihf" LD=ld.lld AR=llvm-ar \
                 NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump        \
                 READELF=llvm-readelf STRIP=llvm-strip -j$(nproc) "$@"       \
@@ -42,30 +45,38 @@ pkgs.mkShell {
         }
 
         build_module() {
-            [ ! -d "$1" ] && echo "Usage: build_module <kernel src> [kernel config, defaults to <kernel src>/.config] [module dir, defaults to .]" && return 1
-            case "$#" in
-                1)
-                    cfg_arg=""
-                    module="$(pwd)"
-                    ;;
-                2)
-                    cfg_arg="KCONFIG_CONFIG=$2"
-                    module="$(pwd)"
-                    ;;
-                3)
-                    cfg_arg="KCONFIG_CONFIG=$2"
-                    module="$3"
-                    ;;
-                *)
-                    echo "Usage: build_module <kernel src> [kernel config, defaults to <kernel src>/.config] [module dir, defaults to .]"
-                    return 1
-                    ;;
-            esac
+            # Usage: build_module [--config <kernel config>] [--module <module path>] --kernel <kernel src> [make args]
+            cfg_arg=""
+            module="$(pwd)"
+            kernel=""
+            while true; do
+                case "$1" in
+                    --config)
+                        cfg_arg="KCONFIG_CONFIG=$2"
+                        shift 2
+                        ;;
+                    --module)
+                        module="$2"
+                        shift 2
+                        ;;
+                    --kernel)
+                        kernel="$2"
+                        shift 2
+                        ;;
+                    *)
+                        break
+                        ;;
+                esac
+            done
+            if [ ! -d "$kernel" ]; then
+                echo "Kernel source tree not specified"
+                return 1
+            fi
             make ARCH=arm "$cfg_arg"                                        \
                 CC="clang -target arm-linux-gnueabihf" LD=ld.lld AR=llvm-ar \
                 NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump        \
                 READELF=llvm-readelf STRIP=llvm-strip -j$(nproc)            \
-                -C "$1" M="$module"
+                -C "$kernel" M="$module" "$@"
         }
     '';
 }
