@@ -35,12 +35,9 @@ pkgs.mkShell {
                 cfg_arg="KCONFIG_CONFIG=$2"
                 shift 2
             fi
-            make ARCH=arm "$cfg_arg"                                        \
-                CC="clang -target arm-linux-gnueabihf" LD=ld.lld AR=llvm-ar \
-                NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump        \
-                READELF=llvm-readelf STRIP=llvm-strip -j$(nproc) "$@"       \
-                && \
-                mkimage -A arm -O linux -T kernel -C none -a 008000         \
+            make LLVM=1 ARCH=arm "$cfg_arg" HOSTCC=cc -j$(nproc) "$@"   \
+                &&                                                      \
+                mkimage -A arm -O linux -T kernel -C none -a 008000     \
                 -e 008000 -n Linux -d arch/arm/boot/zImage kernel.img
         }
 
@@ -72,10 +69,7 @@ pkgs.mkShell {
                 echo "Kernel source tree not specified"
                 return 1
             fi
-            make ARCH=arm "$cfg_arg"                                        \
-                CC="clang -target arm-linux-gnueabihf" LD=ld.lld AR=llvm-ar \
-                NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump        \
-                READELF=llvm-readelf STRIP=llvm-strip -j$(nproc)            \
+            make LLVM=1 ARCH=arm "$cfg_arg" HOSTCC=cc -j$(nproc)    \
                 -C "$kernel" M="$module" "$@"
         }
     '';
