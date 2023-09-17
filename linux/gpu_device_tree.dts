@@ -32,15 +32,13 @@
         #size-cells = <1>;
         ranges;
 
-        vram: buffer@0 {
-            no-map;
-            reg = <0x4000000 0x2000000>;
+        linux,cma {
+            compatible = "shared-dma-pool";
+            reusable;
+            size = <0x2000000>;
+            alignment = <0x1000>;
+            linux,cma-default;
         };
-    };
-
-    reserved-driver {
-        compatible = "xlnx,reserved-memory";
-        memory-region = <&vram>;
     };
 
     amba_pl {
