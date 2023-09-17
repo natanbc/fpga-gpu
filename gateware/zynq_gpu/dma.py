@@ -1,0 +1,161 @@
+from amaranth import *
+from amaranth.lib.fifo import SyncFIFOBuffered
+from amaranth.lib import wiring
+from amaranth.lib.wiring import In, Out, Signature
+from .zynq_ifaces import SAxiHP
+
+
+__all__ = ["ControlRegisters", "DataStream", "DMA", "DMAFifo", "DMAControl"]
+
+
+ControlRegisters = Signature({
+    "base_addr": Out(32),   # Base address. Should be 128-byte aligned.
+                            # TODO: remove lower bits?
+    "words": Out(20),       # How many words of data should be read.
+    "trigger": Out(1),      # Start a transaction. Does nothing if `request_done == 0`.
+    "idle": In(1),          # Whether the memory side is idle. The FIFO may still have data, but all bursts are done,
+                            # so it's safe to modify the buffer.
+    "request_done": In(1),  # Whether all requests have been sent. The data might still not have been read,
+                            # so the buffer should not be modified, but a new transfer may be started.
+})
+
+
+DataStream = Signature({
+    "valid": Out(1),
+    "ready": In(1),
+    "data": Out(64),
+})
+
+
+class DMAFifo(Elaboratable):
+    # TODO: using Component.__init__() confuses the IDE
+    signature = Signature({
+        "axi_read": Out(SAxiHP.members["read"].signature),
+        "data_stream": Out(DataStream),
+        "fifo_level": Out(10),
+        "burst_end": Out(1),
+    })
+
+    def __init__(self):
+        self.axi_read = SAxiHP.members["read"].signature.create()
+        self.data_stream = DataStream.create()
+        self.fifo_level = Signal(10)
+        self.burst_end = Signal(1)
+
+    def elaborate(self, platform):
+        m = Module()
+
+        # 4KiB buffer (exact size of a series 7 BRAM (512x64bit))
+        m.submodules.fifo = fifo = SyncFIFOBuffered(width=64, depth=512)
+
+        assert self.fifo_level.shape() == fifo.r_level.shape()
+        m.d.comb += self.fifo_level.eq(fifo.r_level)
+
+        m.d.comb += [
+            self.axi_read.ready.eq(fifo.w_rdy),
+            fifo.w_data.eq(self.axi_read.data),
+            fifo.w_en.eq(self.axi_read.valid),
+
+            self.burst_end.eq(self.axi_read.ready & self.axi_read.valid & self.axi_read.last),
+
+            self.data_stream.valid.eq(fifo.r_rdy),
+            self.data_stream.data.eq(fifo.r_data),
+            fifo.r_en.eq(self.data_stream.ready),
+        ]
+
+        return m
+
+
+class DMAControl(Elaboratable):
+    signature = Signature({
+        "axi_address": Out(SAxiHP.members["read_address"].signature),
+        "control": In(ControlRegisters),
+        "burst_end": In(1),
+    })
+
+    def __init__(self):
+        self.axi_address = SAxiHP.members["read_address"].signature.create()
+        self.control = ControlRegisters.flip().create()
+        self.burst_end = Signal(1)
+
+    def elaborate(self, platform):
+        m = Module()
+
+        addr = Signal.like(self.control.base_addr)
+        ctr = Signal.like(self.control.words)
+        burst_len = Signal(4)
+
+        # 63 pending bursts at once is good enough
+        pending_bursts = Signal(range(64))
+        sent_burst = Signal()
+        m.d.sync += pending_bursts.eq(
+            pending_bursts +
+            Mux(sent_burst, 1, 0) +
+            Mux(self.burst_end, -1, 0)
+        )
+
+        with m.If(ctr == 0):
+            m.d.comb += [
+                self.control.request_done.eq(1),
+                self.control.idle.eq(pending_bursts == 0),
+            ]
+            with m.If(self.control.trigger):
+                m.d.sync += [
+                    addr.eq(self.control.base_addr),
+                    ctr.eq(self.control.words),
+                ]
+        with m.Else():
+            m.d.comb += [
+                burst_len.eq(Mux(ctr >= 16, 0b1111, ctr - 1)),
+                self.axi_address.valid.eq(~(pending_bursts.all())),
+                self.axi_address.burst.eq(0b01),  # INCR
+                self.axi_address.size.eq(0b11),   # 8 bytes/beat
+                self.axi_address.addr.eq(addr),
+                self.axi_address.len.eq(burst_len),
+                self.axi_address.qos.eq(0b1111),  # High priority
+
+                sent_burst.eq(self.axi_address.ready & self.axi_address.valid),
+            ]
+            with m.If(sent_burst):
+                m.d.sync += [
+                    ctr.eq(ctr - burst_len - 1),
+                    addr.eq(addr + 8 * (burst_len + 1)),
+                ]
+
+        return m
+
+
+class DMA(Elaboratable):
+    signature = Signature({
+        "axi": Out(SAxiHP),
+        "control": In(ControlRegisters),
+        "data_stream": Out(DataStream),
+        "fifo_level": Out(10),
+    })
+
+    def __init__(self):
+        self.axi = SAxiHP.create()
+        self.control = ControlRegisters.create()
+        self.data_stream = DataStream.create()
+        self.fifo_level = Signal(10)
+
+    def elaborate(self, platform):
+        m = Module()
+
+        m.submodules.fifo = fifo = DMAFifo()
+        m.submodules.control = control = DMAControl()
+
+        # TODO: reset
+        m.d.comb += self.axi.aclk.eq(ClockSignal())
+
+        wiring.connect(m, wiring.flipped(self.axi.read), fifo.axi_read)
+        wiring.connect(m, self.control, control.control)
+        wiring.connect(m, wiring.flipped(self.axi.read_address), control.axi_address)
+        wiring.connect(m, wiring.flipped(self.data_stream), fifo.data_stream)
+
+        m.d.comb += [
+            control.burst_end.eq(fifo.burst_end),
+            self.fifo_level.eq(fifo.fifo_level),
+        ]
+
+        return m
