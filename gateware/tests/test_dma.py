@@ -9,7 +9,7 @@ from .utils import wait_until, AxiEmulator
 class DMAFifoTests(unittest.TestCase):
     @staticmethod
     def _do_test(slow_axi: bool, slow_read: bool):
-        dut = DMAFifo()
+        dut = DMAFifo(depth=512)
 
         data = bytes([
             0x11, 0x11, 0x11,
@@ -73,7 +73,7 @@ class DMAFifoTests(unittest.TestCase):
 class DMAControlTests(unittest.TestCase):
     @staticmethod
     def _do_test(count: int, slow_axi: bool = False):
-        dut = DMAControl()
+        dut = DMAControl(max_pending_bursts=64)
 
         base_addr = 0x4000_0000
 

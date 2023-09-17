@@ -2,6 +2,7 @@ from amaranth import *
 from amaranth.lib.fifo import SyncFIFOBuffered
 from amaranth.lib import wiring
 from amaranth.lib.wiring import In, Out, Signature
+from amaranth.utils import log2_int
 from .zynq_ifaces import SAxiHP
 
 
@@ -28,25 +29,28 @@ DataStream = Signature({
 
 
 class DMAFifo(Elaboratable):
-    # TODO: using Component.__init__() confuses the IDE
-    signature = Signature({
-        "axi_read": Out(SAxiHP.members["read"].signature),
-        "data_stream": Out(DataStream),
-        "fifo_level": Out(10),
-        "burst_end": Out(1),
-    })
+    def __init__(self, depth):
+        self._depth = depth
 
-    def __init__(self):
         self.axi_read = SAxiHP.members["read"].signature.create()
         self.data_stream = DataStream.create()
-        self.fifo_level = Signal(10)
+        self.fifo_level = Signal(log2_int(depth + 1, need_pow2=False))
         self.burst_end = Signal(1)
+
+    @property
+    def signature(self):
+        return Signature({
+            "axi_read": Out(SAxiHP.members["read"].signature),
+            "data_stream": Out(DataStream),
+            "fifo_level": Out(log2_int(self._depth + 1, need_pow2=False)),
+            "burst_end": Out(1),
+        })
 
     def elaborate(self, platform):
         m = Module()
 
         # 4KiB buffer (exact size of a series 7 BRAM (512x64bit))
-        m.submodules.fifo = fifo = SyncFIFOBuffered(width=64, depth=512)
+        m.submodules.fifo = fifo = SyncFIFOBuffered(width=64, depth=self._depth)
 
         assert self.fifo_level.shape() == fifo.r_level.shape()
         m.d.comb += self.fifo_level.eq(fifo.r_level)
@@ -73,7 +77,9 @@ class DMAControl(Elaboratable):
         "burst_end": In(1),
     })
 
-    def __init__(self):
+    def __init__(self, *, max_pending_bursts):
+        self._max_pending = max_pending_bursts
+
         self.axi_address = SAxiHP.members["read_address"].signature.create()
         self.control = ControlRegisters.flip().create()
         self.burst_end = Signal(1)
@@ -85,8 +91,7 @@ class DMAControl(Elaboratable):
         ctr = Signal.like(self.control.words)
         burst_len = Signal(4)
 
-        # 63 pending bursts at once is good enough
-        pending_bursts = Signal(range(64))
+        pending_bursts = Signal(range(self._max_pending))
         sent_burst = Signal()
         m.d.sync += pending_bursts.eq(
             pending_bursts +
@@ -126,24 +131,34 @@ class DMAControl(Elaboratable):
 
 
 class DMA(Elaboratable):
-    signature = Signature({
-        "axi": Out(SAxiHP),
-        "control": In(ControlRegisters),
-        "data_stream": Out(DataStream),
-        "fifo_level": Out(10),
-    })
+    def __init__(self, max_pending_bursts=64, fifo_depth=512):
+        if max_pending_bursts & (max_pending_bursts - 1):
+            raise ValueError(f"Max pending bursts must be a power of two, not {max_pending_bursts!r}")
+        if fifo_depth & (fifo_depth - 1):
+            raise ValueError("FIFO bytes must be a power of two")
 
-    def __init__(self):
+        self._max_pending = max_pending_bursts
+        self._fifo_depth = fifo_depth
+
         self.axi = SAxiHP.create()
         self.control = ControlRegisters.create()
         self.data_stream = DataStream.create()
-        self.fifo_level = Signal(10)
+        self.fifo_level = Signal(log2_int(fifo_depth + 1, need_pow2=False))
+
+    @property
+    def signature(self):
+        return Signature({
+            "axi": Out(SAxiHP),
+            "control": In(ControlRegisters),
+            "data_stream": Out(DataStream),
+            "fifo_level": Out(log2_int(self._fifo_depth + 1, need_pow2=False)),
+        })
 
     def elaborate(self, platform):
         m = Module()
 
-        m.submodules.fifo = fifo = DMAFifo()
-        m.submodules.control = control = DMAControl()
+        m.submodules.fifo = fifo = DMAFifo(depth=self._fifo_depth)
+        m.submodules.control = control = DMAControl(max_pending_bursts=self._max_pending)
 
         # TODO: reset
         m.d.comb += self.axi.aclk.eq(ClockSignal())
