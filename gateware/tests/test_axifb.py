@@ -1,14 +1,14 @@
 from amaranth.sim import *
-from zynq_gpu.axifb import PixelFIFO, AxiReader, AxiFramebuffer
+from zynq_gpu.axifb import PixelAdapter, AxiFramebuffer
 import struct
 import unittest
 from .utils import wait_until, AxiEmulator
 
 
-class PixelFIFOTests(unittest.TestCase):
+class PixelAdapterTests(unittest.TestCase):
     @staticmethod
-    def _do_test(slow_axi: bool, slow_read: bool):
-        dut = PixelFIFO()
+    def _do_test(slow_memory: bool, slow_read: bool):
+        dut = PixelAdapter()
 
         data = bytes([
             0x11, 0x11, 0x11,
@@ -23,16 +23,16 @@ class PixelFIFOTests(unittest.TestCase):
         assert len(data) % 8 == 0
 
         def axi_feed():
-            yield dut.axi_read.valid.eq(1)
+            yield dut.memory_stream.valid.eq(1)
             for word in struct.unpack("<{}Q".format(len(data) // 8), data):
-                yield dut.axi_read.data.eq(word)
-                yield from wait_until(dut.axi_read.ready)
-                if slow_axi:
-                    yield dut.axi_read.valid.eq(0)
+                yield dut.memory_stream.data.eq(word)
+                yield from wait_until(dut.memory_stream.ready)
+                if slow_memory:
+                    yield dut.memory_stream.valid.eq(0)
                     for _ in range(10):
                         yield
-                    yield dut.axi_read.valid.eq(1)
-            yield dut.axi_read.valid.eq(0)
+                    yield dut.memory_stream.valid.eq(1)
+            yield dut.memory_stream.valid.eq(0)
 
         def pixel_read():
             yield dut.pixel_stream.ready.eq(1)
@@ -59,65 +59,14 @@ class PixelFIFOTests(unittest.TestCase):
     def test_slow_reads(self):
         self._do_test(False, True)
 
-    def test_slow_axi(self):
+    def test_slow_memory(self):
         self._do_test(True, False)
 
-    def test_slow_axi_slow_reads(self):
+    def test_slow_memory_slow_reads(self):
         self._do_test(True, True)
 
 
-class AxiReaderTest(unittest.TestCase):
-    @staticmethod
-    def _do_test(count: int, slow_axi: bool = False):
-        dut = AxiReader()
-
-        base_addr = 0x4000_0000
-
-        def control():
-            yield dut.control.base_addr.eq(base_addr)
-            yield dut.control.words.eq(count)
-            yield dut.control.trigger.eq(1)
-            yield
-            yield dut.control.trigger.eq(0)
-
-        def axi_read():
-            yield dut.axi_address.ready.eq(1)
-            done = 0
-            while done < count:
-                yield from wait_until(dut.axi_address.valid)
-                expected_addr = base_addr + done * 8
-                actual_addr = (yield dut.axi_address.addr)
-                assert expected_addr == actual_addr, \
-                    f"Wrong address, expected {hex(expected_addr)}, got {hex(actual_addr)}"
-                expected_burst_len = 16 if (count - done) >= 16 else (count - done)
-                actual_burst_len = (yield dut.axi_address.len) + 1
-                assert expected_burst_len == actual_burst_len, \
-                    f"Wrong burst length, expected {expected_burst_len}, got {actual_burst_len}"
-                done += actual_burst_len
-                if slow_axi:
-                    yield dut.axi_address.ready.eq(0)
-                    for _ in range(10):
-                        yield
-                    yield dut.axi_address.ready.eq(1)
-            assert done == count, f"Wrong total read words, expected {count}, got {done}"
-
-        sim = Simulator(dut)
-        sim.add_sync_process(control)
-        sim.add_sync_process(axi_read)
-        sim.add_clock(1e-6)
-        sim.run()
-
-    def test_burst_len_multiple(self):
-        self._do_test(128)
-
-    def test_burst_len_not_multiple(self):
-        self._do_test(69)
-
-    def test_slow_axi(self):
-        self._do_test(1337, True)
-
-
-class AxiFramebufferTest(unittest.TestCase):
+class AxiFramebufferTests(unittest.TestCase):
     @staticmethod
     def _do_test(slow_read: bool):
         dut = AxiFramebuffer()
