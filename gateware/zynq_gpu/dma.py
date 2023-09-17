@@ -49,7 +49,6 @@ class DMAFifo(Elaboratable):
     def elaborate(self, platform):
         m = Module()
 
-        # 4KiB buffer (exact size of a series 7 BRAM (512x64bit))
         m.submodules.fifo = fifo = SyncFIFOBuffered(width=64, depth=self._depth)
 
         assert self.fifo_level.shape() == fifo.r_level.shape()
