@@ -36,7 +36,7 @@ class PixelAdapter(Elaboratable):
         m.d.comb += [
             self.pixel_stream.valid.eq(self.memory_stream.valid),
         ]
-        with m.FSM(name="fifo_adapter"):
+        with m.FSM():
             # memory word = AAABBBCC, remain = XXXXXXXX
             with m.State("A"):
                 m.d.comb += self.pixel_stream.pixel.eq(self.memory_stream.data.word_select(ctr, 24))
