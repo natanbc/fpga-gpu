@@ -88,7 +88,6 @@ class DMAControl(Elaboratable):
 
         addr = Signal.like(self.control.base_addr)
         ctr = Signal.like(self.control.words)
-        burst_len = Signal(4)
 
         pending_bursts = Signal(range(self._max_pending))
         sent_burst = Signal()
@@ -109,22 +108,24 @@ class DMAControl(Elaboratable):
                     ctr.eq(self.control.words),
                 ]
         with m.Else():
-            m.d.comb += [
-                burst_len.eq(Mux(ctr >= 16, 0b1111, ctr - 1)),
-                self.axi_address.valid.eq(~(pending_bursts.all())),
-                self.axi_address.burst.eq(0b01),  # INCR
-                self.axi_address.size.eq(0b11),   # 8 bytes/beat
-                self.axi_address.addr.eq(addr),
-                self.axi_address.len.eq(burst_len),
-                self.axi_address.qos.eq(0b1111),  # High priority
+            m.d.comb += self.axi_address.valid.eq(~(pending_bursts.all()))
 
-                sent_burst.eq(self.axi_address.ready & self.axi_address.valid),
+        burst_len = Signal(4)
+        m.d.comb += [
+            burst_len.eq(Mux(ctr[4:].any(), 0b1111, ctr - 1)),
+            self.axi_address.burst.eq(0b01),  # INCR
+            self.axi_address.size.eq(0b11),   # 8 bytes/beat
+            self.axi_address.addr.eq(addr),
+            self.axi_address.len.eq(burst_len),
+            self.axi_address.qos.eq(0b1111),  # High priority
+
+            sent_burst.eq(self.axi_address.ready & self.axi_address.valid),
+        ]
+        with m.If(sent_burst):
+            m.d.sync += [
+                ctr.eq(ctr - burst_len - 1),
+                addr.eq(addr + 8 * (burst_len + 1)),
             ]
-            with m.If(sent_burst):
-                m.d.sync += [
-                    ctr.eq(ctr - burst_len - 1),
-                    addr.eq(addr + 8 * (burst_len + 1)),
-                ]
 
         return m
 
