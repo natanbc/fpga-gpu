@@ -11,7 +11,6 @@ __all__ = ["ControlRegisters", "DataStream", "DMA", "DMAFifo", "DMAControl"]
 
 ControlRegisters = Signature({
     "base_addr": Out(25),   # 128-byte aligned base address. The 7 LSBs are filled with zeroes.
-                            # TODO: remove lower bits?
     "words": Out(20),       # How many words of data should be read.
     "trigger": Out(1),      # Start a transaction. Does nothing if `request_done == 0`.
     "idle": In(1),          # Whether the memory side is idle. The FIFO may still have data, but all bursts are done,
