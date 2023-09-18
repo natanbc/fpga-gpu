@@ -18,6 +18,7 @@ ControlRegisters = Signature({
                             # so it's safe to modify the buffer.
     "request_done": In(1),  # Whether all requests have been sent. The data might still not have been read,
                             # so the buffer should not be modified, but a new transfer may be started.
+    "qos": Out(4),          # AXI QOS field.
 })
 
 
@@ -117,7 +118,7 @@ class DMAControl(Elaboratable):
             self.axi_address.size.eq(0b11),   # 8 bytes/beat
             self.axi_address.addr.eq(Cat(C(0, 7), addr_128)),
             self.axi_address.len.eq(burst_len),
-            self.axi_address.qos.eq(0b1111),  # High priority
+            self.axi_address.qos.eq(self.control.qos),
 
             sent_burst.eq(self.axi_address.ready & self.axi_address.valid),
         ]
