@@ -10,7 +10,7 @@ __all__ = ["ControlRegisters", "DataStream", "DMA", "DMAFifo", "DMAControl"]
 
 
 ControlRegisters = Signature({
-    "base_addr": Out(32),   # Base address. Should be 128-byte aligned.
+    "base_addr": Out(25),   # 128-byte aligned base address. The 7 LSBs are filled with zeroes.
                             # TODO: remove lower bits?
     "words": Out(20),       # How many words of data should be read.
     "trigger": Out(1),      # Start a transaction. Does nothing if `request_done == 0`.
@@ -86,7 +86,7 @@ class DMAControl(Elaboratable):
     def elaborate(self, platform):
         m = Module()
 
-        addr = Signal.like(self.control.base_addr)
+        addr_128 = Signal.like(self.control.base_addr)
         ctr = Signal.like(self.control.words)
 
         pending_bursts = Signal(range(self._max_pending))
@@ -104,7 +104,7 @@ class DMAControl(Elaboratable):
             ]
             with m.If(self.control.trigger):
                 m.d.sync += [
-                    addr.eq(self.control.base_addr),
+                    addr_128.eq(self.control.base_addr),
                     ctr.eq(self.control.words),
                 ]
         with m.Else():
@@ -115,7 +115,7 @@ class DMAControl(Elaboratable):
             burst_len.eq(Mux(ctr[4:].any(), 0b1111, ctr - 1)),
             self.axi_address.burst.eq(0b01),  # INCR
             self.axi_address.size.eq(0b11),   # 8 bytes/beat
-            self.axi_address.addr.eq(addr),
+            self.axi_address.addr.eq(Cat(C(0, 7), addr_128)),
             self.axi_address.len.eq(burst_len),
             self.axi_address.qos.eq(0b1111),  # High priority
 
@@ -123,8 +123,11 @@ class DMAControl(Elaboratable):
         ]
         with m.If(sent_burst):
             m.d.sync += [
-                ctr.eq(ctr - burst_len - 1),
-                addr.eq(addr + 8 * (burst_len + 1)),
+                # If burst length is less than 16 words, it's the last burst so counter
+                # would get zeroed.
+                ctr.eq(Mux(burst_len == 0b1111, ctr - 16, 0)),
+                # Doesn't matter if it's left wrong after the last access
+                addr_128.eq(Mux(burst_len == 0b1111, addr_128 + 1, addr_128)),
             ]
 
         return m

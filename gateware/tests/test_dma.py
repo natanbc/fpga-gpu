@@ -78,7 +78,7 @@ class DMAControlTests(unittest.TestCase):
         base_addr = 0x4000_0000
 
         def control():
-            yield dut.control.base_addr.eq(base_addr)
+            yield dut.control.base_addr.eq(base_addr >> 7)
             yield dut.control.words.eq(count)
             yield dut.control.trigger.eq(1)
             yield
@@ -167,7 +167,7 @@ class DMATest(unittest.TestCase):
         emulator = AxiEmulator(dut.axi, read, None)
 
         def control():
-            yield dut.control.base_addr.eq(base_addr)
+            yield dut.control.base_addr.eq(base_addr >> 7)
             yield dut.control.words.eq(len(data) // 8)
             yield dut.control.trigger.eq(1)
             yield

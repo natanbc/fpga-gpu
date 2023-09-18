@@ -93,7 +93,7 @@ class AxiFramebufferTests(unittest.TestCase):
         emulator = AxiEmulator(dut.axi, read, None)
 
         def control():
-            yield dut.control.base_addr.eq(base_addr)
+            yield dut.control.base_addr.eq(base_addr >> 7)
             yield dut.control.words.eq(len(data) // 8)
             yield dut.control.trigger.eq(1)
             yield
