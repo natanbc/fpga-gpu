@@ -48,8 +48,7 @@ class WishboneCDCTests(unittest.TestCase):
         sim.add_sync_process(target, domain="target")
         sim.add_clock(1e-6, domain="initiator")
         sim.add_clock(target_clock, domain="target")
-        with sim.write_vcd(vcd_file="wb_cdc.vcd"):
-            sim.run()
+        sim.run()
 
     def test_same_freq(self):
         self._do_test(1e-6)
