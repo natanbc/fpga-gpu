@@ -7,7 +7,7 @@ from .utils import wait_until
 class WishboneCDCTests(unittest.TestCase):
     @staticmethod
     def _do_test(target_clock: float):
-        dut = WishboneCDC(addr_width=32)
+        dut = WishboneCDC(addr_width=32, features={"err"})
 
         def initiator():
             for i in range(10):
