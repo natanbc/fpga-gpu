@@ -200,6 +200,6 @@ class Axi2Wishbone(Elaboratable):
         wiring.connect(m, write2wb.w, wiring.flipped(self.axi.write_data))
         wiring.connect(m, write2wb.b, wiring.flipped(self.axi.write_response))
 
-        m.d.comb += arbiter.bus.connect(self.wishbone)
+        wiring.connect(m, arbiter.bus, wiring.flipped(self.wishbone))
 
         return m
