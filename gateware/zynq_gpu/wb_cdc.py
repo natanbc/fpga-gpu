@@ -1,6 +1,7 @@
 from amaranth import *
 from amaranth.lib import data
 from amaranth.lib.fifo import AsyncFIFO
+from amaranth.lib.wiring import Signature, In, Out
 from amaranth_soc import wishbone
 
 
@@ -11,6 +12,10 @@ class WishboneCDC(Elaboratable):
     def __init__(self, addr_width: int, data_width: int = 32, granularity: int = 8, features=frozenset()):
         if features not in (frozenset(), {"err"}):
             raise ValueError("Features must be either empty or only 'err'")
+
+        self._addr_width = addr_width
+        self._data_width = data_width
+        self._granularity = granularity
         self._features = frozenset(features)
 
         self._req = data.StructLayout({
@@ -39,6 +44,19 @@ class WishboneCDC(Elaboratable):
             granularity=granularity,
             features=features,
         )
+
+    @property
+    def signature(self):
+        wb = wishbone.Signature(
+            addr_width=self._addr_width,
+            data_width=self._data_width,
+            granularity=self._granularity,
+            features=self._features
+        )
+        return Signature({
+            "i_bus": In(wb),
+            "t_bus": Out(wb),
+        })
 
     def elaborate(self, platform):
         m = Module()

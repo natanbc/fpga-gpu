@@ -12,7 +12,7 @@ class AxiReadToWishbone(Elaboratable):
     signature = Signature({
         "ar": Out(MAxiGP.members["read_address"].signature),
         "r": Out(MAxiGP.members["read"].signature),
-        # "wishbone": Out(wishbone.Interface),
+        "wishbone": Out(wishbone.Signature(addr_width=30, data_width=32, granularity=8, features={"err"})),
     })
 
     def __init__(self):
@@ -82,7 +82,7 @@ class AxiWriteToWishbone(Elaboratable):
         "aw": Out(MAxiGP.members["write_address"].signature),
         "w": Out(MAxiGP.members["write_data"].signature),
         "b": Out(MAxiGP.members["write_response"].signature),
-        # "wishbone": Out(wishbone.Interface),
+        "wishbone": Out(wishbone.Signature(addr_width=30, data_width=32, granularity=8, features={"err"})),
     })
 
     def __init__(self):
@@ -103,7 +103,7 @@ class AxiWriteToWishbone(Elaboratable):
 
         wid = Signal(12)
         burst_len = Signal(4)
-        with m.FSM() as fsm:
+        with m.FSM():
             with m.State("AXI_WAIT_ADDR"):
                 m.d.comb += self.aw.ready.eq(1)
                 with m.If(self.aw.valid):
@@ -164,7 +164,7 @@ class AxiWriteToWishbone(Elaboratable):
 class Axi2Wishbone(Elaboratable):
     signature = Signature({
         "axi": Out(MAxiGP),
-        # "wishbone": Out(wishbone.Interface),
+        "wishbone": Out(wishbone.Signature(addr_width=30, data_width=32, granularity=8, features={"err"})),
     })
 
     def __init__(self):
