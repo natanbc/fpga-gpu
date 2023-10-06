@@ -109,7 +109,7 @@ static long ioctl_print(struct device *dev, int buf_fd) {
 static long ioctl_alloc_dmabuf(struct device* dev, unsigned long arg) {
     struct userdma_buf_creation_data d;
     long res;
-    pr_warn("Use /dev/dma_heap instead");
+//    pr_warn("Use /dev/dma_heap instead");
     if(copy_from_user(&d, (const void __user*)arg, sizeof(d))) {
         return -EFAULT;
     }
