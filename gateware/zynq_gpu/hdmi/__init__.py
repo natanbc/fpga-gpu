@@ -1,5 +1,5 @@
 from amaranth import *
-from amaranth.lib.wiring import Signature, In, Out
+from amaranth.lib.wiring import Component, Signature, In, Out
 from .phy import TMDSSerializer
 from .tmds_encoder import TMDSEncoder
 
@@ -7,33 +7,18 @@ from .tmds_encoder import TMDSEncoder
 __all__ = ["HDMITx"]
 
 
-class HDMITx(Elaboratable):
-    signature = Signature({
-        "r": In(8),
-        "g": In(8),
-        "b": In(8),
-        "data_enable": In(1),
-        "hsync": In(1),
-        "vsync": In(1),
+class HDMITx(Component):
+    r: In(8)
+    g: In(8)
+    b: In(8)
+    data_enable: In(1)
+    hsync: In(1)
+    vsync: In(1)
 
-        "tmds_clk": Out(1),
-        "tmds_d0": Out(1),
-        "tmds_d1": Out(1),
-        "tmds_d2": Out(1),
-    })
-
-    def __init__(self):
-        self.r = Signal(8)
-        self.g = Signal(8)
-        self.b = Signal(8)
-        self.data_enable = Signal()
-        self.hsync = Signal()
-        self.vsync = Signal()
-
-        self.tmds_clk = Signal()
-        self.tmds_d0 = Signal()
-        self.tmds_d1 = Signal()
-        self.tmds_d2 = Signal()
+    tmds_clk: Out(1)
+    tmds_d0: Out(1)
+    tmds_d1: Out(1)
+    tmds_d2: Out(1)
 
     def elaborate(self, platform):
         m = Module()

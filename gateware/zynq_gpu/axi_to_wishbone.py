@@ -1,6 +1,6 @@
 from amaranth import *
 from amaranth.lib import wiring
-from amaranth.lib.wiring import Signature, Out
+from amaranth.lib.wiring import Component, Signature, Out
 from amaranth_soc import wishbone
 from .zynq_ifaces import MAxiGP
 
@@ -8,22 +8,10 @@ from .zynq_ifaces import MAxiGP
 __all__ = ["Axi2Wishbone"]
 
 
-class AxiReadToWishbone(Elaboratable):
-    signature = Signature({
-        "ar": Out(MAxiGP.members["read_address"].signature),
-        "r": Out(MAxiGP.members["read"].signature),
-        "wishbone": Out(wishbone.Signature(addr_width=30, data_width=32, granularity=8, features={"err"})),
-    })
-
-    def __init__(self):
-        self.ar = MAxiGP.members["read_address"].signature.create()
-        self.r = MAxiGP.members["read"].signature.create()
-        self.wishbone = wishbone.Interface(
-            addr_width=30,
-            data_width=32,
-            granularity=8,
-            features={"err"},
-        )
+class AxiReadToWishbone(Component):
+    ar: Out(MAxiGP.members["read_address"].signature)
+    r: Out(MAxiGP.members["read"].signature)
+    wishbone: Out(wishbone.Signature(addr_width=30, data_width=32, granularity=8, features={"err"}))
 
     def elaborate(self, platform):
         m = Module()
@@ -77,24 +65,11 @@ class AxiReadToWishbone(Elaboratable):
         return m
 
 
-class AxiWriteToWishbone(Elaboratable):
-    signature = Signature({
-        "aw": Out(MAxiGP.members["write_address"].signature),
-        "w": Out(MAxiGP.members["write_data"].signature),
-        "b": Out(MAxiGP.members["write_response"].signature),
-        "wishbone": Out(wishbone.Signature(addr_width=30, data_width=32, granularity=8, features={"err"})),
-    })
-
-    def __init__(self):
-        self.aw = MAxiGP.members["write_address"].signature.create()
-        self.w = MAxiGP.members["write_data"].signature.create()
-        self.b = MAxiGP.members["write_response"].signature.create()
-        self.wishbone = wishbone.Interface(
-            addr_width=30,
-            data_width=32,
-            granularity=8,
-            features={"err"},
-        )
+class AxiWriteToWishbone(Component):
+    aw: Out(MAxiGP.members["write_address"].signature)
+    w: Out(MAxiGP.members["write_data"].signature)
+    b: Out(MAxiGP.members["write_response"].signature)
+    wishbone: Out(wishbone.Signature(addr_width=30, data_width=32, granularity=8, features={"err"}))
 
     def elaborate(self, platform):
         m = Module()
@@ -161,20 +136,9 @@ class AxiWriteToWishbone(Elaboratable):
         return m
 
 
-class Axi2Wishbone(Elaboratable):
-    signature = Signature({
-        "axi": Out(MAxiGP),
-        "wishbone": Out(wishbone.Signature(addr_width=30, data_width=32, granularity=8, features={"err"})),
-    })
-
-    def __init__(self):
-        self.axi = MAxiGP.create()
-        self.wishbone = wishbone.Interface(
-            addr_width=30,
-            data_width=32,
-            granularity=8,
-            features={"err"},
-        )
+class Axi2Wishbone(Component):
+    axi: Out(MAxiGP)
+    wishbone: Out(wishbone.Signature(addr_width=30, data_width=32, granularity=8, features={"err"}))
 
     def elaborate(self, platform):
         m = Module()

@@ -1,19 +1,16 @@
 from amaranth import *
-from amaranth.lib.wiring import Signature, In, Out
+from amaranth.lib.wiring import Component, Signature, In, Out
 
 
-class TMDSSerializer(Elaboratable):
-    signature = Signature({
-        "data": In(10),
-        "o": Out(1),
-    })
+class TMDSSerializer(Component):
+    data: In(10)
+    o: Out(1)
 
     def __init__(self, pix_domain: str = "pix", pix_5x_domain: str = "pix_5x"):
         self._pix_domain = pix_domain
         self._pix_5x_domain = pix_5x_domain
 
-        self.data = Signal(10)
-        self.o = Signal()
+        super().__init__()
 
     def elaborate(self, platform):
         m = Module()

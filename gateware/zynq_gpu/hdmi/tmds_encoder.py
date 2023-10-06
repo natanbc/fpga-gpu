@@ -1,5 +1,5 @@
 from amaranth import *
-from amaranth.lib.wiring import Signature, In, Out
+from amaranth.lib.wiring import Component, Signature, In, Out
 
 
 __all__ = ["TMDSEncoder"]
@@ -20,19 +20,11 @@ def _delay(m: Module, signal: Signal, cycles: int):
     return flops[-1]
 
 
-class TMDSEncoder(Elaboratable):
-    signature = Signature({
-        "data": In(8),
-        "control": In(2),
-        "data_enable": In(1),
-        "output": Out(10),
-    })
-
-    def __init__(self):
-        self.data = Signal(8)
-        self.control = Signal(2)
-        self.data_enable = Signal()
-        self.output = Signal(10)
+class TMDSEncoder(Component):
+    data: In(8)
+    control: In(2)
+    data_enable: In(1)
+    output: Out(10)
 
     def elaborate(self, platform):
         m = Module()

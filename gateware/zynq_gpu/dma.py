@@ -1,7 +1,7 @@
 from amaranth import *
 from amaranth.lib.fifo import SyncFIFOBuffered
 from amaranth.lib import wiring
-from amaranth.lib.wiring import In, Out, Signature
+from amaranth.lib.wiring import Component, In, Out, Signature
 from amaranth.utils import log2_int
 from .zynq_ifaces import SAxiHP
 
@@ -28,14 +28,11 @@ DataStream = Signature({
 })
 
 
-class DMAFifo(Elaboratable):
+class DMAFifo(Component):
     def __init__(self, depth):
         self._depth = depth
 
-        self.axi_read = SAxiHP.members["read"].signature.create()
-        self.data_stream = DataStream.create()
-        self.fifo_level = Signal(log2_int(depth + 1, need_pow2=False))
-        self.burst_end = Signal(1)
+        super().__init__()
 
     @property
     def signature(self):
@@ -69,19 +66,15 @@ class DMAFifo(Elaboratable):
         return m
 
 
-class DMAControl(Elaboratable):
-    signature = Signature({
-        "axi_address": Out(SAxiHP.members["read_address"].signature),
-        "control": In(ControlRegisters),
-        "burst_end": In(1),
-    })
+class DMAControl(Component):
+    axi_address: Out(SAxiHP.members["read_address"].signature)
+    control: In(ControlRegisters)
+    burst_end: In(1)
 
     def __init__(self, *, max_pending_bursts):
         self._max_pending = max_pending_bursts
 
-        self.axi_address = SAxiHP.members["read_address"].signature.create()
-        self.control = ControlRegisters.flip().create()
-        self.burst_end = Signal(1)
+        super().__init__()
 
     def elaborate(self, platform):
         m = Module()
@@ -133,7 +126,7 @@ class DMAControl(Elaboratable):
         return m
 
 
-class DMA(Elaboratable):
+class DMA(Component):
     def __init__(self, max_pending_bursts=64, fifo_depth=512):
         if max_pending_bursts & (max_pending_bursts - 1):
             raise ValueError(f"Max pending bursts must be a power of two, not {max_pending_bursts!r}")
@@ -143,10 +136,7 @@ class DMA(Elaboratable):
         self._max_pending = max_pending_bursts
         self._fifo_depth = fifo_depth
 
-        self.axi = SAxiHP.create()
-        self.control = ControlRegisters.create()
-        self.data_stream = DataStream.create()
-        self.fifo_level = Signal(log2_int(fifo_depth + 1, need_pow2=False))
+        super().__init__()
 
     @property
     def signature(self):
@@ -167,7 +157,7 @@ class DMA(Elaboratable):
         m.d.comb += self.axi.aclk.eq(ClockSignal())
 
         wiring.connect(m, wiring.flipped(self.axi.read), fifo.axi_read)
-        wiring.connect(m, self.control, control.control)
+        wiring.connect(m, wiring.flipped(self.control), control.control)
         wiring.connect(m, wiring.flipped(self.axi.read_address), control.axi_address)
         wiring.connect(m, wiring.flipped(self.data_stream), fifo.data_stream)
 
