@@ -29,9 +29,10 @@ PointStream = Signature({
     "ready": In(1),
     "payload": Out(StructLayout({
         "p": Point,
-        "w0": signed(32),
-        "w1": signed(32),
-        "w2": signed(32),
+        # UQ(0.24) (which can be converted to Q(1.24) with a 0 in the sign bit for DSP48E1 usage)
+        "w0": unsigned(24),
+        "w1": unsigned(24),
+        "w2": unsigned(24),
     })),
 })
 
@@ -98,7 +99,7 @@ class EdgeWalker(Component):
 
         _area = orient2d(self.triangle.payload.v0, self.triangle.payload.v1, self.triangle.payload.v2)
 
-        area_recip = Signal(32)
+        area_recip = Signal(24)
 
         w0_row = Signal.like(_w0_row)
         w1_row = Signal.like(_w1_row)
@@ -110,7 +111,7 @@ class EdgeWalker(Component):
 
         m.d.comb += [
             self.points.payload.p.eq(p),
-            divider.n.eq(0x7FFF_FFFF),
+            divider.n.eq(0xFFFFFF),
         ]
         if self._scale_recip:
             m.d.comb += [

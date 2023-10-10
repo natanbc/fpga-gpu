@@ -50,7 +50,7 @@ def points(v0: Tuple[int, int], v1: Tuple[int, int], v2: Tuple[int, int]) -> Ite
 
 def points_recip(v0: Tuple[int, int], v1: Tuple[int, int], v2: Tuple[int, int]) -> Iterable[Tuple[int, int, int, int, int]]:
     area = orient2d(v0, v1, v2)
-    area_recip = 0x7FFF_FFFF // area
+    area_recip = 0xFFFFFF // area
     for x, y, w0, w1, w2 in points(v0, v1, v2):
         yield x, y, w0*area_recip, w1*area_recip, w2*area_recip
 
