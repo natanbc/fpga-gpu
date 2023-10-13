@@ -6,11 +6,11 @@ from amaranth.utils import log2_int
 from .zynq_ifaces import SAxiHP
 
 
-__all__ = ["ControlRegisters", "DataStream", "DMA", "DMAFifo", "DMAControl"]
+__all__ = ["ControlRegisters", "data_stream_signature", "DMA", "DMAFifo", "DMAControl"]
 
 
 ControlRegisters = Signature({
-    "base_addr": Out(25),   # 128-byte aligned base address. The 7 LSBs are filled with zeroes.
+    "base_addr": Out(26),   # 64-byte aligned base address. The 6 LSBs are filled with zeroes.
     "words": Out(20),       # How many words of data should be read.
     "trigger": Out(1),      # Start a transaction. Does nothing if `request_done == 0`.
     "idle": In(1),          # Whether the memory side is idle. The FIFO may still have data, but all bursts are done,
@@ -21,24 +21,27 @@ ControlRegisters = Signature({
 })
 
 
-DataStream = Signature({
-    "valid": Out(1),
-    "ready": In(1),
-    "data": Out(64),
-})
+def data_stream_signature(width):
+    return Signature({
+        "valid": Out(1),
+        "ready": In(1),
+        "data": Out(width)
+    })
 
 
 class DMAFifo(Component):
-    def __init__(self, depth):
+    def __init__(self, *, axi_iface_sig, depth):
+        self._axi_iface_sig = axi_iface_sig
         self._depth = depth
 
         super().__init__()
 
     @property
     def signature(self):
+        width = self._axi_iface_sig.members["read"].signature.members["data"].shape
         return Signature({
-            "axi_read": Out(SAxiHP.members["read"].signature),
-            "data_stream": Out(DataStream),
+            "axi_read": Out(self._axi_iface_sig.members["read"].signature),
+            "data_stream": Out(data_stream_signature(width)),
             "fifo_level": Out(log2_int(self._depth + 1, need_pow2=False)),
             "burst_end": Out(1),
         })
@@ -67,19 +70,36 @@ class DMAFifo(Component):
 
 
 class DMAControl(Component):
-    axi_address: Out(SAxiHP.members["read_address"].signature)
-    control: In(ControlRegisters)
-    burst_end: In(1)
-
-    def __init__(self, *, max_pending_bursts):
+    def __init__(self, *, axi_iface_sig, max_pending_bursts):
+        self._axi_iface_sig = axi_iface_sig
         self._max_pending = max_pending_bursts
 
         super().__init__()
 
+    @property
+    def signature(self):
+        return Signature({
+            "axi_address": Out(self._axi_iface_sig.members["read_address"].signature),
+            "control": In(ControlRegisters),
+            "burst_end": In(1),
+        })
+
     def elaborate(self, platform):
         m = Module()
 
-        addr_128 = Signal.like(self.control.base_addr)
+        width = self._axi_iface_sig.members["read"].signature.members["data"].shape
+        match width:
+            case 32:
+                axsize = 0b10
+                addr_inc = 1
+            case 64:
+                axsize = 0b11
+                addr_inc = 2
+            case _:
+                raise Exception(f"Unsupported AXI width {width!r}")
+        m.d.comb += self.axi_address.size.eq(axsize),   # log2(width/8) bytes/beat
+
+        addr_64 = Signal.like(self.control.base_addr)
         ctr = Signal.like(self.control.words)
 
         pending_bursts = Signal(range(self._max_pending))
@@ -97,7 +117,7 @@ class DMAControl(Component):
             ]
             with m.If(self.control.trigger):
                 m.d.sync += [
-                    addr_128.eq(self.control.base_addr),
+                    addr_64.eq(self.control.base_addr),
                     ctr.eq(self.control.words),
                 ]
         with m.Else():
@@ -107,8 +127,7 @@ class DMAControl(Component):
         m.d.comb += [
             burst_len.eq(Mux(ctr[4:].any(), 0b1111, ctr - 1)),
             self.axi_address.burst.eq(0b01),  # INCR
-            self.axi_address.size.eq(0b11),   # 8 bytes/beat
-            self.axi_address.addr.eq(Cat(C(0, 7), addr_128)),
+            self.axi_address.addr.eq(Cat(C(0, 6), addr_64)),
             self.axi_address.len.eq(burst_len),
             self.axi_address.qos.eq(self.control.qos),
 
@@ -120,19 +139,20 @@ class DMAControl(Component):
                 # would get zeroed.
                 ctr.eq(Mux(burst_len == 0b1111, ctr - 16, 0)),
                 # Doesn't matter if it's left wrong after the last access
-                addr_128.eq(Mux(burst_len == 0b1111, addr_128 + 1, addr_128)),
+                addr_64.eq(Mux(burst_len == 0b1111, addr_64 + addr_inc, addr_64)),
             ]
 
         return m
 
 
 class DMA(Component):
-    def __init__(self, max_pending_bursts=64, fifo_depth=512):
+    def __init__(self, axi_iface_sig, max_pending_bursts=64, fifo_depth=512):
         if max_pending_bursts & (max_pending_bursts - 1):
             raise ValueError(f"Max pending bursts must be a power of two, not {max_pending_bursts!r}")
         if fifo_depth & (fifo_depth - 1):
             raise ValueError("FIFO bytes must be a power of two")
 
+        self._axi_iface_sig = axi_iface_sig
         self._max_pending = max_pending_bursts
         self._fifo_depth = fifo_depth
 
@@ -140,18 +160,20 @@ class DMA(Component):
 
     @property
     def signature(self):
+        width = self._axi_iface_sig.members["read"].signature.members["data"].shape
         return Signature({
-            "axi": Out(SAxiHP),
+            "axi": Out(self._axi_iface_sig),
             "control": In(ControlRegisters),
-            "data_stream": Out(DataStream),
+            "data_stream": Out(data_stream_signature(width)),
             "fifo_level": Out(log2_int(self._fifo_depth + 1, need_pow2=False)),
         })
 
     def elaborate(self, platform):
         m = Module()
 
-        m.submodules.fifo = fifo = DMAFifo(depth=self._fifo_depth)
-        m.submodules.control = control = DMAControl(max_pending_bursts=self._max_pending)
+        m.submodules.fifo = fifo = DMAFifo(axi_iface_sig=self._axi_iface_sig, depth=self._fifo_depth)
+        m.submodules.control = control = DMAControl(axi_iface_sig=self._axi_iface_sig,
+                                                    max_pending_bursts=self._max_pending)
 
         # TODO: reset
         m.d.comb += self.axi.aclk.eq(ClockSignal())

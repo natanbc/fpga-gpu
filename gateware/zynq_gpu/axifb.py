@@ -1,7 +1,7 @@
 from amaranth import *
 from amaranth.lib import wiring
 from amaranth.lib.wiring import Component, In, Out, Signature
-from .dma import DMA, ControlRegisters, DataStream
+from .dma import DMA, ControlRegisters, data_stream_signature
 from .zynq_ifaces import SAxiHP
 
 
@@ -18,7 +18,7 @@ PixelStream = Signature({
 
 # 64 bit -> 24 bit
 class PixelAdapter(Component):
-    memory_stream: In(DataStream)
+    memory_stream: In(data_stream_signature(64))
     pixel_stream: Out(PixelStream)
 
     def elaborate(self, platform):
@@ -83,7 +83,7 @@ class AxiFramebuffer(Component):
         m = Module()
 
         m.submodules.pixel_adapter = pixel_adapter = PixelAdapter()
-        m.submodules.dma = dma = DMA()
+        m.submodules.dma = dma = DMA(axi_iface_sig=SAxiHP)
 
         wiring.connect(m, dma.axi, wiring.flipped(self.axi))
         wiring.connect(m, wiring.flipped(self.control), dma.control)
