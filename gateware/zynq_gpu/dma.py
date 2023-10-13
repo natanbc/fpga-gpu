@@ -49,7 +49,8 @@ class DMAFifo(Component):
     def elaborate(self, platform):
         m = Module()
 
-        m.submodules.fifo = fifo = SyncFIFOBuffered(width=64, depth=self._depth)
+        width = self._axi_iface_sig.members["read"].signature.members["data"].shape
+        m.submodules.fifo = fifo = SyncFIFOBuffered(width=width, depth=self._depth)
 
         assert self.fifo_level.shape() == fifo.r_level.shape()
         m.d.comb += self.fifo_level.eq(fifo.r_level)
@@ -146,15 +147,17 @@ class DMAControl(Component):
 
 
 class DMA(Component):
-    def __init__(self, axi_iface_sig, max_pending_bursts=64, fifo_depth=512):
+    def __init__(self, axi_iface_sig, max_pending_bursts=64, fifo_depth_bytes=4096):
         if max_pending_bursts & (max_pending_bursts - 1):
             raise ValueError(f"Max pending bursts must be a power of two, not {max_pending_bursts!r}")
-        if fifo_depth & (fifo_depth - 1):
-            raise ValueError("FIFO bytes must be a power of two")
+        if fifo_depth_bytes & (fifo_depth_bytes - 1):
+            raise ValueError("FIFO depth must be a power of two")
 
         self._axi_iface_sig = axi_iface_sig
         self._max_pending = max_pending_bursts
-        self._fifo_depth = fifo_depth
+
+        width = self._axi_iface_sig.members["read"].signature.members["data"].shape
+        self._fifo_depth = fifo_depth_bytes // (width // 8)
 
         super().__init__()
 
@@ -167,6 +170,10 @@ class DMA(Component):
             "data_stream": Out(data_stream_signature(width)),
             "fifo_level": Out(log2_int(self._fifo_depth + 1, need_pow2=False)),
         })
+
+    @property
+    def fifo_depth(self):
+        return self._fifo_depth
 
     def elaborate(self, platform):
         m = Module()
