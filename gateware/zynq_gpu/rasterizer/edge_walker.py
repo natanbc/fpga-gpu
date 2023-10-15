@@ -148,6 +148,7 @@ class EdgeWalker(Component):
                         min_x.eq(_min_x),
                         max_x.eq(_max_x),
                         max_y.eq(_max_y),
+                        div_done.eq(0),
                     ]
                     m.d.comb += [
                         divider.d.eq(_area),
