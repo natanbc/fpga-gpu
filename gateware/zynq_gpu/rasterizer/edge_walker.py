@@ -115,6 +115,7 @@ class EdgeWalker(Component):
         ]
         if self._scale_recip:
             m.d.comb += [
+                divider.d.eq(_area),
                 self.points.payload.w0.eq(w0 * area_recip),
                 self.points.payload.w1.eq(w1 * area_recip),
                 self.points.payload.w2.eq(w2 * area_recip),
@@ -135,7 +136,10 @@ class EdgeWalker(Component):
 
         with m.FSM():
             with m.State("IDLE"):
-                m.d.comb += self.idle.eq(1)
+                m.d.comb += [
+                    self.idle.eq(1),
+                    divider.trigger.eq(1),
+                ]
                 with m.If(self.triangle.valid):
                     m.d.sync += [
                         a01.eq(_a01),
@@ -149,10 +153,6 @@ class EdgeWalker(Component):
                         max_x.eq(_max_x),
                         max_y.eq(_max_y),
                         div_done.eq(0),
-                    ]
-                    m.d.comb += [
-                        divider.d.eq(_area),
-                        divider.trigger.eq(1),
                     ]
                     with m.If(_area == 0):
                         m.next = "IDLE"
