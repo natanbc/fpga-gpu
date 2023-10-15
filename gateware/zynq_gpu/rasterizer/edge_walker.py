@@ -126,6 +126,13 @@ class EdgeWalker(Component):
                 self.points.payload.w2.eq(w2),
             ]
 
+        div_done = Signal()
+        with m.If(divider.done):
+            m.d.sync += [
+                area_recip.eq(divider.o),
+                div_done.eq(1),
+            ]
+
         with m.FSM():
             with m.State("IDLE"):
                 m.d.comb += self.idle.eq(1)
@@ -141,30 +148,20 @@ class EdgeWalker(Component):
                         min_x.eq(_min_x),
                         max_x.eq(_max_x),
                         max_y.eq(_max_y),
+                    ]
+                    m.d.comb += [
                         divider.d.eq(_area),
+                        divider.trigger.eq(1),
                     ]
                     m.next = "CALC_ORIENT"
             with m.State("CALC_ORIENT"):
-                m.d.comb += divider.trigger.eq(1)
                 m.d.comb += self.triangle.ready.eq(1)
                 m.d.sync += [
                     w0_row.eq(_w0_row),
                     w1_row.eq(_w1_row),
                     w2_row.eq(_w2_row),
                 ]
-                if self._scale_recip:
-                    with m.If(divider.done):
-                        m.d.sync += area_recip.eq(divider.o)
-                        m.next = "LOOP_Y"
-                    with m.Else():
-                        m.next = "WAIT_DIV"
-                else:
-                    m.next = "LOOP_Y"
-            if self._scale_recip:
-                with m.State("WAIT_DIV"):
-                    with m.If(divider.done):
-                        m.d.sync += area_recip.eq(divider.o)
-                        m.next = "LOOP_Y"
+                m.next = "LOOP_Y"
             with m.State("LOOP_Y"):
                 with m.If(p.y > max_y):
                     m.next = "IDLE"
@@ -186,8 +183,13 @@ class EdgeWalker(Component):
                     ]
                     m.next = "LOOP_Y"
                 with m.Else():
-                    m.d.comb += self.points.valid.eq((w0 | w1 | w2) >= 0)
-                    with m.If(~self.points.valid | self.points.ready):
+                    valid_point = Signal()
+                    m.d.comb += valid_point.eq((w0 | w1 | w2) >= 0)
+                    if self._scale_recip:
+                        m.d.comb += self.points.valid.eq(div_done & valid_point)
+                    else:
+                        m.d.comb += self.points.valid.eq(valid_point)
+                    with m.If(~valid_point | (self.points.valid & self.points.ready)):
                         m.d.sync += [
                             w0.eq(w0 + a12),
                             w1.eq(w1 + a20),
