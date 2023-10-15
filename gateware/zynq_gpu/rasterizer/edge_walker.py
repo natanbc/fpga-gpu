@@ -47,8 +47,49 @@ def max3(a, b, c):
     return Mux(max12 > c, max12, c)
 
 
-def orient2d(a, b, c):
-    return (b.x-a.x)*(c.y-a.y) - (b.y-a.y)*(c.x-a.x)
+class Orient2D(Component):
+    a: In(Point)
+    b: In(Point)
+    c: In(Point)
+
+    res: Out(signed(25))
+
+    def elaborate(self, platform):
+        m = Module()
+
+        # Cycle 0
+
+        _bx_ax = self.b.x - self.a.x
+        _cy_ay = self.c.y - self.a.y
+        _by_ay = self.b.y - self.a.y
+        _cx_ax = self.c.x - self.a.x
+
+        bx_ax = Signal.like(_bx_ax)
+        cy_ay = Signal.like(_cy_ay)
+        by_ay = Signal.like(_by_ay)
+        cx_ax = Signal.like(_cx_ax)
+        m.d.sync += [
+            bx_ax.eq(_bx_ax),
+            cy_ay.eq(_cy_ay),
+            by_ay.eq(_by_ay),
+            cx_ax.eq(_cx_ax),
+        ]
+
+        # Cycle 1
+
+        _bx_ax_cy_ay = bx_ax * cy_ay
+        _by_ay_cx_ax = by_ay * cx_ax
+
+        bx_ax_cy_ay = Signal.like(_bx_ax_cy_ay)
+        by_ay_cx_ax = Signal.like(_by_ay_cx_ax)
+        m.d.sync += [
+            bx_ax_cy_ay.eq(_bx_ax_cy_ay),
+            by_ay_cx_ax.eq(_by_ay_cx_ax),
+        ]
+
+        m.d.comb += self.res.eq(bx_ax_cy_ay - by_ay_cx_ax)
+
+        return m
 
 
 class EdgeWalker(Component):
@@ -93,17 +134,40 @@ class EdgeWalker(Component):
         max_y = Signal.like(_max_y)
 
         p = Signal.like(_p)
-        _w0_row = orient2d(self.triangle.payload.v1, self.triangle.payload.v2, p)
-        _w1_row = orient2d(self.triangle.payload.v2, self.triangle.payload.v0, p)
-        _w2_row = orient2d(self.triangle.payload.v0, self.triangle.payload.v1, p)
 
-        _area = orient2d(self.triangle.payload.v0, self.triangle.payload.v1, self.triangle.payload.v2)
+        m.submodules.area_orient2d = area_orient2d = Orient2D()
+        m.d.comb += [
+            area_orient2d.a.eq(self.triangle.payload.v0),
+            area_orient2d.b.eq(self.triangle.payload.v1),
+            area_orient2d.c.eq(self.triangle.payload.v2),
+        ]
+
+        m.submodules.w0_orient2d = w0_orient2d = Orient2D()
+        m.d.comb += [
+            w0_orient2d.a.eq(self.triangle.payload.v1),
+            w0_orient2d.b.eq(self.triangle.payload.v2),
+            w0_orient2d.c.eq(p),
+        ]
+
+        m.submodules.w1_orient2d = w1_orient2d = Orient2D()
+        m.d.comb += [
+            w1_orient2d.a.eq(self.triangle.payload.v2),
+            w1_orient2d.b.eq(self.triangle.payload.v0),
+            w1_orient2d.c.eq(p),
+        ]
+
+        m.submodules.w2_orient2d = w2_orient2d = Orient2D()
+        m.d.comb += [
+            w2_orient2d.a.eq(self.triangle.payload.v0),
+            w2_orient2d.b.eq(self.triangle.payload.v1),
+            w2_orient2d.c.eq(p),
+        ]
 
         area_recip = Signal(24)
 
-        w0_row = Signal.like(_w0_row)
-        w1_row = Signal.like(_w1_row)
-        w2_row = Signal.like(_w2_row)
+        w0_row = Signal.like(w0_orient2d.res)
+        w1_row = Signal.like(w1_orient2d.res)
+        w2_row = Signal.like(w2_orient2d.res)
 
         w0 = Signal.like(w0_row)
         w1 = Signal.like(w1_row)
@@ -115,7 +179,7 @@ class EdgeWalker(Component):
         ]
         if self._scale_recip:
             m.d.comb += [
-                divider.d.eq(_area),
+                divider.d.eq(area_orient2d.res),
                 self.points.payload.w0.eq(w0 * area_recip),
                 self.points.payload.w1.eq(w1 * area_recip),
                 self.points.payload.w2.eq(w2 * area_recip),
@@ -136,11 +200,8 @@ class EdgeWalker(Component):
 
         with m.FSM():
             with m.State("IDLE"):
-                m.d.comb += [
-                    self.idle.eq(1),
-                    divider.trigger.eq(1),
-                ]
-                with m.If(self.triangle.valid):
+                m.d.comb += self.idle.eq(1)
+                with m.If(self.triangle.valid):  # area cycle 0, w0/w1/w2 not started
                     m.d.sync += [
                         a01.eq(_a01),
                         a12.eq(_a12),
@@ -154,17 +215,22 @@ class EdgeWalker(Component):
                         max_y.eq(_max_y),
                         div_done.eq(0),
                     ]
-                    with m.If(_area == 0):
-                        m.next = "IDLE"
-                        m.d.comb += self.triangle.ready.eq(1)
-                    with m.Else():
-                        m.next = "CALC_ORIENT"
-            with m.State("CALC_ORIENT"):
+                    m.next = "ORIENT2D_DELAY1"
+            with m.State("ORIENT2D_DELAY1"):  # area cycle 1, w0/w1/w2 cycle 0
+                m.next = "ORIENT2D_DELAY2"
+            with m.State("ORIENT2D_DELAY2"):  # area done, w0/w1/w2 cycle 1
+                with m.If(area_orient2d.res == 0):
+                    m.next = "IDLE"
+                    m.d.comb += self.triangle.ready.eq(1)
+                with m.Else():
+                    m.d.comb += divider.trigger.eq(1)
+                    m.next = "ORIENT2D_DELAY3"
+            with m.State("ORIENT2D_DELAY3"):  # w0/w1/w2 done
                 m.d.comb += self.triangle.ready.eq(1)
                 m.d.sync += [
-                    w0_row.eq(_w0_row),
-                    w1_row.eq(_w1_row),
-                    w2_row.eq(_w2_row),
+                    w0_row.eq(w0_orient2d.res),
+                    w1_row.eq(w1_orient2d.res),
+                    w2_row.eq(w2_orient2d.res),
                 ]
                 m.next = "LOOP_Y"
             with m.State("LOOP_Y"):
