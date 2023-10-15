@@ -178,8 +178,8 @@ class AxiEmulator:
             self._w_q.write(AxiWriteData(
                 (yield w.data),
                 (yield w.strb),
-                (yield w.id),
                 (yield w.last) == 1,
+                (yield w.id),
             ))
 
     def _b(self):
