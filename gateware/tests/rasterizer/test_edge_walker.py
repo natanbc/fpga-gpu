@@ -15,23 +15,31 @@ def submit_triangle(s, v0, v1, v2):
     yield s.valid.eq(1)
     yield from wait_until(s.ready)
     yield s.valid.eq(0)
+    yield
 
 
 class EdgeWalkerTest(unittest.TestCase):
     @staticmethod
-    def _test_coordinates(v0, v1, v2, count):
+    def _test_coordinates(triangles, count):
         dut = EdgeWalker()
 
+        submit_done = False
+
         def trig_feed():
+            nonlocal submit_done
+
             yield Passive()
-            yield from submit_triangle(dut.triangle, v0, v1, v2)
+            for v0, v1, v2 in triangles:
+                yield from submit_triangle(dut.triangle, v0, v1, v2)
+            submit_done = True
 
         def point_read():
             st = [[False]*10 for _ in range(10)]
             exp_st = [[False]*10 for _ in range(10)]
 
-            for x, y, _, _, _ in points(v0, v1, v2):
-                exp_st[y][x] = True
+            for v0, v1, v2 in triangles:
+                for x, y, _, _, _ in points(v0, v1, v2):
+                    exp_st[y][x] = True
 
             def print_state(name, s):
                 print(f"{name}:")
@@ -50,7 +58,9 @@ class EdgeWalkerTest(unittest.TestCase):
             while True:
                 yield from wait_until(dut.points.valid | dut.idle)
                 if (yield dut.idle):
-                    break
+                    if submit_done:
+                        break
+                    continue
                 x, y = (yield dut.points.payload.p.x), (yield dut.points.payload.p.y)
                 st[y][x] = True
 
@@ -72,19 +82,25 @@ class EdgeWalkerTest(unittest.TestCase):
         sim.run()
 
     @staticmethod
-    def _test_interpolation(v0, v1, v2, recip: bool):
+    def _test_interpolation(triangles, recip: bool):
         dut = EdgeWalker(recip)
 
+        submit_done = False
+
         def trig_feed():
+            nonlocal submit_done
             yield Passive()
-            yield from submit_triangle(dut.triangle, v0, v1, v2)
+            for v0, v1, v2 in triangles:
+                yield from submit_triangle(dut.triangle, v0, v1, v2)
+            submit_done = True
 
         def point_read():
             st = {}
             exp_st = {}
 
-            for x, y, w0, w1, w2 in (points_recip if recip else points)(v0, v1, v2):
-                exp_st[(x, y)] = (w0, w1, w2)
+            for v0, v1, v2 in triangles:
+                for x, y, w0, w1, w2 in (points_recip if recip else points)(v0, v1, v2):
+                    exp_st[(x, y)] = (w0, w1, w2)
 
             for _ in range(5):
                 yield
@@ -93,7 +109,9 @@ class EdgeWalkerTest(unittest.TestCase):
             while True:
                 yield from wait_until(dut.points.valid | dut.idle)
                 if (yield dut.idle):
-                    break
+                    if submit_done:
+                        break
+                    continue
                 x, y = (yield dut.points.payload.p.x), (yield dut.points.payload.p.y)
                 w0, w1, w2 = (yield dut.points.payload.w0), (yield dut.points.payload.w1), (yield dut.points.payload.w2)
                 st[(x, y)] = (w0, w1, w2)
@@ -110,20 +128,20 @@ class EdgeWalkerTest(unittest.TestCase):
 
     @staticmethod
     def _test_raw_interpolation_factors(v0, v1, v2):
-        EdgeWalkerTest._test_interpolation(v0, v1, v2, False)
+        EdgeWalkerTest._test_interpolation([(v0, v1, v2)], False)
 
     @staticmethod
     def _test_interpolation_factors(v0, v1, v2):
-        EdgeWalkerTest._test_interpolation(v0, v1, v2, True)
+        EdgeWalkerTest._test_interpolation([(v0, v1, v2)], True)
 
     def test_empty(self):
-        self._test_coordinates((2, 2), (2, 2), (2, 2), 0)
+        self._test_coordinates([((2, 2), (2, 2), (2, 2))], 0)
 
     def test_triangle(self):
-        self._test_coordinates((2, 2), (8, 2), (2, 8), 7 + 6 + 5 + 4 + 3 + 2 + 1)
+        self._test_coordinates([((2, 2), (8, 2), (2, 8))], 7 + 6 + 5 + 4 + 3 + 2 + 1)
 
     def test_wrong_vertex_order(self):
-        self._test_coordinates((2, 2), (2, 8), (8, 2), 0)
+        self._test_coordinates([((2, 2), (2, 8), (8, 2))], 0)
 
     def test_raw_interp(self):
         self._test_raw_interpolation_factors((2, 2), (8, 2), (2, 8))
@@ -131,3 +149,11 @@ class EdgeWalkerTest(unittest.TestCase):
     def test_interp(self):
         self._test_interpolation_factors((2, 2), (8, 2), (2, 8))
 
+    def test_square(self):
+        self._test_coordinates([((2, 2), (8, 2), (2, 8)), ((8, 2), (8, 8), (2, 8))], 7 * 7)
+
+    def test_square_raw_interp(self):
+        self._test_interpolation([((2, 2), (8, 2), (2, 8)), ((8, 2), (8, 8), (2, 8))], False)
+
+    def test_square_interp(self):
+        self._test_interpolation([((2, 2), (8, 2), (2, 8)), ((8, 2), (8, 8), (2, 8))], True)
