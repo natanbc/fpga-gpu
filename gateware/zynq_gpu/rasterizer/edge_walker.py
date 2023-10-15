@@ -154,7 +154,11 @@ class EdgeWalker(Component):
                         divider.d.eq(_area),
                         divider.trigger.eq(1),
                     ]
-                    m.next = "CALC_ORIENT"
+                    with m.If(_area == 0):
+                        m.next = "IDLE"
+                        m.d.comb += self.triangle.ready.eq(1)
+                    with m.Else():
+                        m.next = "CALC_ORIENT"
             with m.State("CALC_ORIENT"):
                 m.d.comb += self.triangle.ready.eq(1)
                 m.d.sync += [

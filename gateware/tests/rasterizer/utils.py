@@ -28,6 +28,9 @@ def points(v0: Tuple[int, int], v1: Tuple[int, int], v2: Tuple[int, int]) -> Ite
     w1_row = orient2d(v2, v0, p)
     w2_row = orient2d(v0, v1, p)
 
+    if orient2d(v0, v1, v2) == 0:
+        return
+
     while p[1] <= max_y:
         p[0] = min_x
 

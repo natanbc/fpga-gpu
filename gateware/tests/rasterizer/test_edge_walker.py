@@ -116,6 +116,9 @@ class EdgeWalkerTest(unittest.TestCase):
     def _test_interpolation_factors(v0, v1, v2):
         EdgeWalkerTest._test_interpolation(v0, v1, v2, True)
 
+    def test_empty(self):
+        self._test_coordinates((2, 2), (2, 2), (2, 2), 0)
+
     def test_triangle(self):
         self._test_coordinates((2, 2), (8, 2), (2, 8), 7 + 6 + 5 + 4 + 3 + 2 + 1)
 
