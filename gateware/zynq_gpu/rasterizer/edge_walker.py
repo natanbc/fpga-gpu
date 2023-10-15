@@ -223,7 +223,6 @@ class EdgeWalker(Component):
             with m.State("ORIENT2D_DELAY2"):  # area done, w0/w1/w2 cycle 1
                 with m.If(area_orient2d.res == 0):
                     m.next = "IDLE"
-                    m.d.comb += self.triangle.ready.eq(1)
                 with m.Else():
                     m.d.comb += divider.trigger.eq(1)
                     m.next = "ORIENT2D_DELAY3"
