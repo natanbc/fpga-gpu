@@ -23,6 +23,10 @@ class PixelWriter(Component):
         # `pixel_addr[:3] in [7, 8]` => multiple writes
         m.d.comb += split_write.eq(self.pixel_addr[1:3].all())
 
+        split_page = Signal()
+        # `pixel_addr[:12] in [0xFFE, 0xFFF]` => write crosses 4KiB boundary
+        m.d.comb += split_page.eq(self.pixel_addr[1:12].all())
+
         cyc1_write_data = Signal(64)
         cyc1_write_mask = Signal(8)
 
@@ -62,7 +66,7 @@ class PixelWriter(Component):
                     m.d.sync += [
                         axi_send_addr.eq(1),
                         self.axi_addr.addr.eq(Cat(C(0, 3), self.pixel_addr[3:])),
-                        self.axi_addr.len.eq(split_write),
+                        self.axi_addr.len.eq(split_write & ~split_page),
                     ]
 
                     with m.If(split_write):
@@ -78,7 +82,10 @@ class PixelWriter(Component):
                                 0b01,
                             ))
                         ]
-                        m.next = "WRITE_MULTI_1"
+                        with m.If(split_page):
+                            m.next = "WRITE_SPLIT_PAGE_1"
+                        with m.Else():
+                            m.next = "WRITE_MULTI_1"
                     with m.Else():
                         m.next = "WRITE_SINGLE"
             with m.State("WRITE_SINGLE"):
@@ -90,16 +97,29 @@ class PixelWriter(Component):
             with m.State("WRITE_MULTI_2"):
                 with m.If(axi_data_done):
                     m.next = "IDLE"
+            with m.State("WRITE_SPLIT_PAGE_1"):
+                with m.If(axi_data_done):
+                    m.d.sync += [
+                        self.axi_addr.addr.eq(self.axi_addr.addr + 8),
+                        axi_send_addr.eq(1),
+                    ]
+                    m.next = "WRITE_SPLIT_PAGE_2"
+            with m.State("WRITE_SPLIT_PAGE_2"):
+                with m.If(axi_data_done):
+                    m.next = "IDLE"
 
-        m.d.comb += self.axi_data.last.eq(fsm.ongoing("WRITE_SINGLE") | fsm.ongoing("WRITE_MULTI_2"))
+        m.d.comb += self.axi_data.last.eq(
+            fsm.ongoing("WRITE_SINGLE") | fsm.ongoing("WRITE_MULTI_2") |
+            fsm.ongoing("WRITE_SPLIT_PAGE_1") | fsm.ongoing("WRITE_SPLIT_PAGE_2")
+        )
 
-        with m.If(fsm.ongoing("WRITE_SINGLE") | fsm.ongoing("WRITE_MULTI_1")):
+        with m.If(fsm.ongoing("WRITE_SINGLE") | fsm.ongoing("WRITE_MULTI_1") | fsm.ongoing("WRITE_SPLIT_PAGE_1")):
             m.d.comb += [
                 axi_send_data.eq(1),
                 self.axi_data.data.eq(cyc1_write_data),
                 self.axi_data.strb.eq(cyc1_write_mask),
             ]
-        with m.If(fsm.ongoing("WRITE_MULTI_2")):
+        with m.If(fsm.ongoing("WRITE_MULTI_2") | fsm.ongoing("WRITE_SPLIT_PAGE_2")):
             m.d.comb += [
                 axi_send_data.eq(1),
                 self.axi_data.data.eq(cyc2_write_data),

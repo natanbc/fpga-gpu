@@ -73,3 +73,10 @@ class PixelWriterTest(unittest.TestCase):
                 Write(base, 0xCC << 56, 0b1000_0000),
                 Write(base + 8, 0xAABB, 0b0000_0011),
             )
+
+    def test_cross_4KiB(self):
+        self.check_writes(
+            0xFFF, 0xAABBCC,
+            Write(0xFF8, 0xCC << 56, 0b1000_0000),
+            Write(0x1000, 0xAABB, 0b0000_0011),
+        )

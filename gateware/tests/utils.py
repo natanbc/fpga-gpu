@@ -79,7 +79,7 @@ def _addr_gen(addr: AxiAddress) -> Iterable[int]:
             return itertools.repeat(addr.address, addr.burst_length)
         case 0b01:  # INCR
             start_addr = addr.address
-            end_addr = addr.address + addr.bytes_per_beat * addr.burst_length
+            end_addr = addr.address + addr.bytes_per_beat * addr.burst_length - 1
             assert (start_addr & ~0xFFF) == (end_addr & ~0xFFF), f"Start and end addresses cross 4KiB boundary"
 
             return (addr.address + addr.bytes_per_beat * i for i in range(addr.burst_length))
