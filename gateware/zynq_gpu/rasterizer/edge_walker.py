@@ -64,7 +64,7 @@ class EdgeWalker(Component):
     def elaborate(self, platform):
         m = Module()
 
-        m.submodules.divider = divider = Divider()
+        m.submodules.divider = divider = Divider(24, 3)
 
         _a01 = self.triangle.payload.v0.y - self.triangle.payload.v1.y
         _a12 = self.triangle.payload.v1.y - self.triangle.payload.v2.y
