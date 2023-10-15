@@ -217,6 +217,8 @@ class EdgeWalker(Component):
                     ]
                     m.next = "ORIENT2D_DELAY1"
             with m.State("ORIENT2D_DELAY1"):  # area cycle 1, w0/w1/w2 cycle 0
+                # safe to change, values already in the pipeline
+                m.d.comb += self.triangle.ready.eq(1)
                 m.next = "ORIENT2D_DELAY2"
             with m.State("ORIENT2D_DELAY2"):  # area done, w0/w1/w2 cycle 1
                 with m.If(area_orient2d.res == 0):
@@ -226,7 +228,6 @@ class EdgeWalker(Component):
                     m.d.comb += divider.trigger.eq(1)
                     m.next = "ORIENT2D_DELAY3"
             with m.State("ORIENT2D_DELAY3"):  # w0/w1/w2 done
-                m.d.comb += self.triangle.ready.eq(1)
                 m.d.sync += [
                     w0_row.eq(w0_orient2d.res),
                     w1_row.eq(w1_orient2d.res),
