@@ -87,7 +87,16 @@ class Orient2D(Component):
             by_ay_cx_ax.eq(_by_ay_cx_ax),
         ]
 
-        m.d.comb += self.res.eq(bx_ax_cy_ay - by_ay_cx_ax)
+        # Cycle 2
+
+        bx_ax_cy_ay_2 = Signal.like(bx_ax_cy_ay)
+        by_ay_cx_ax_2 = Signal.like(by_ay_cx_ax)
+        m.d.sync += [
+            bx_ax_cy_ay_2.eq(bx_ax_cy_ay),
+            by_ay_cx_ax_2.eq(by_ay_cx_ax),
+        ]
+
+        m.d.comb += self.res.eq(bx_ax_cy_ay_2 - by_ay_cx_ax_2)
 
         return m
 
@@ -105,7 +114,7 @@ class EdgeWalker(Component):
     def elaborate(self, platform):
         m = Module()
 
-        m.submodules.divider = divider = Divider(24, 3)
+        m.submodules.divider = divider = Divider(24, 1)
 
         _a01 = self.triangle.payload.v0.y - self.triangle.payload.v1.y
         _a12 = self.triangle.payload.v1.y - self.triangle.payload.v2.y
@@ -220,13 +229,15 @@ class EdgeWalker(Component):
                 # safe to change, values already in the pipeline
                 m.d.comb += self.triangle.ready.eq(1)
                 m.next = "ORIENT2D_DELAY2"
-            with m.State("ORIENT2D_DELAY2"):  # area done, w0/w1/w2 cycle 1
+            with m.State("ORIENT2D_DELAY2"):  # area cycle 2, w0/w1/w2 cycle 2
+                m.next = "ORIENT2D_DELAY3"
+            with m.State("ORIENT2D_DELAY3"):  # area done, w0/w1/w2 cycle 2
                 with m.If(area_orient2d.res == 0):
                     m.next = "IDLE"
                 with m.Else():
                     m.d.comb += divider.trigger.eq(1)
-                    m.next = "ORIENT2D_DELAY3"
-            with m.State("ORIENT2D_DELAY3"):  # w0/w1/w2 done
+                    m.next = "ORIENT2D_DELAY4"
+            with m.State("ORIENT2D_DELAY4"):  # w0/w1/w2 done
                 m.d.sync += [
                     w0_row.eq(w0_orient2d.res),
                     w1_row.eq(w1_orient2d.res),
