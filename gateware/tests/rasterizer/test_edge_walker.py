@@ -2,16 +2,19 @@ from amaranth.sim import *
 from zynq_gpu.rasterizer import EdgeWalker
 import unittest
 from ..utils import wait_until
-from .utils import points, points_recip
+from .utils import points, points_recip, Vertex
 
 
-def submit_triangle(s, v0, v1, v2):
-    yield s.payload.v0.x.eq(v0[0])
-    yield s.payload.v0.y.eq(v0[1])
-    yield s.payload.v1.x.eq(v1[0])
-    yield s.payload.v1.y.eq(v1[1])
-    yield s.payload.v2.x.eq(v2[0])
-    yield s.payload.v2.y.eq(v2[1])
+def p2d(xy):
+    x, y = xy
+    return Vertex(x, y, 0, 0, 0, 0)
+
+
+def submit_triangle(s, v0: Vertex, v1: Vertex, v2: Vertex):
+    for name, v in [("v0", v0), ("v1", v1), ("v2", v2)]:
+        dest = getattr(s.payload, name)
+        for sig in "xy":
+            yield getattr(dest, sig).eq(getattr(v, sig))
     yield s.valid.eq(1)
     yield from wait_until(s.ready)
     yield s.valid.eq(0)
@@ -20,8 +23,10 @@ def submit_triangle(s, v0, v1, v2):
 
 class EdgeWalkerTest(unittest.TestCase):
     @staticmethod
-    def _test_coordinates(triangles, count):
-        dut = EdgeWalker()
+    def _test_coordinates(triangles, count, *, div_unroll: int = 1, use_fifo: bool = False):
+        triangles = [[p2d(xy) for xy in t] for t in triangles]
+
+        dut = EdgeWalker(True, div_unroll=div_unroll, use_fifo=use_fifo)
 
         submit_done = False
 
@@ -38,8 +43,8 @@ class EdgeWalkerTest(unittest.TestCase):
             exp_st = [[False]*10 for _ in range(10)]
 
             for v0, v1, v2 in triangles:
-                for x, y, _, _, _ in points(v0, v1, v2):
-                    exp_st[y][x] = True
+                for c in points(v0, v1, v2):
+                    exp_st[c.y][c.x] = True
 
             def print_state(name, s):
                 print(f"{name}:")
@@ -57,7 +62,7 @@ class EdgeWalkerTest(unittest.TestCase):
             yield dut.points.ready.eq(1)
             while True:
                 yield from wait_until(dut.points.valid | dut.idle)
-                if (yield dut.idle):
+                if not (yield dut.points.valid) and (yield dut.idle):
                     if submit_done:
                         break
                     continue
@@ -82,8 +87,10 @@ class EdgeWalkerTest(unittest.TestCase):
         sim.run()
 
     @staticmethod
-    def _test_interpolation(triangles, recip: bool):
-        dut = EdgeWalker(recip)
+    def _test_interpolation(triangles, recip: bool, *, div_unroll: int = 1, use_fifo: bool = False):
+        triangles = [[p2d(xy) for xy in t] for t in triangles]
+
+        dut = EdgeWalker(recip, div_unroll=div_unroll, use_fifo=use_fifo)
 
         submit_done = False
 
@@ -99,8 +106,8 @@ class EdgeWalkerTest(unittest.TestCase):
             exp_st = {}
 
             for v0, v1, v2 in triangles:
-                for x, y, w0, w1, w2 in (points_recip if recip else points)(v0, v1, v2):
-                    exp_st[(x, y)] = (w0, w1, w2)
+                for c in (points_recip if recip else points)(v0, v1, v2):
+                    exp_st[(c.x, c.y)] = (c.w0, c.w1, c.w2)
 
             for _ in range(5):
                 yield
@@ -108,7 +115,7 @@ class EdgeWalkerTest(unittest.TestCase):
             yield dut.points.ready.eq(1)
             while True:
                 yield from wait_until(dut.points.valid | dut.idle)
-                if (yield dut.idle):
+                if not (yield dut.points.valid) and (yield dut.idle):
                     if submit_done:
                         break
                     continue
