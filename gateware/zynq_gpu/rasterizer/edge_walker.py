@@ -1,4 +1,5 @@
 from amaranth import *
+from amaranth.lib import wiring
 from amaranth.lib.data import StructLayout
 from amaranth.lib.wiring import Component, Signature, In, Out
 from ..utils import Divider
@@ -101,20 +102,84 @@ class Orient2D(Component):
         return m
 
 
+class PassthroughScaler(Component):
+    area: In(24)
+    area_trigger: In(1)
+
+    points: In(PointStream)
+    points_scaled: Out(PointStream)
+
+    def elaborate(self, platform):
+        m = Module()
+
+        wiring.connect(m, wiring.flipped(self.points), wiring.flipped(self.points_scaled))
+
+        return m
+
+
+class Scaler(Component):
+    area: In(24)
+    area_trigger: In(1)
+
+    points: In(PointStream)
+    points_scaled: Out(PointStream)
+
+    def __init__(self, div_unroll: int):
+        self._div_unroll = div_unroll
+        super().__init__()
+
+    def elaborate(self, platform):
+        m = Module()
+
+        m.submodules.divider = divider = Divider(24, self._div_unroll)
+        m.d.comb += [
+            divider.n.eq(0xFFFFFF),
+            divider.d.eq(self.area),
+            divider.trigger.eq(self.area_trigger),
+        ]
+
+        area_recip = Signal(24)
+        div_done = Signal()
+        with m.If(divider.done):
+            m.d.sync += [
+                area_recip.eq(divider.o),
+                div_done.eq(1),
+            ]
+        with m.If(self.area_trigger):
+            m.d.sync += div_done.eq(0)
+
+        m.d.comb += [
+            self.points.ready.eq(self.points_scaled.ready & div_done),
+            self.points_scaled.valid.eq(self.points.valid & div_done),
+
+            self.points_scaled.payload.p.eq(self.points.payload.p),
+            self.points_scaled.payload.w0.eq(self.points.payload.w0 * area_recip),
+            self.points_scaled.payload.w1.eq(self.points.payload.w1 * area_recip),
+            self.points_scaled.payload.w2.eq(self.points.payload.w2 * area_recip),
+        ]
+
+        return m
+
+
 class EdgeWalker(Component):
     triangle: In(TriangleStream)
     idle: Out(1)
     points: Out(PointStream)
 
     # Whether interpolation weights should be scaled by 1/area
-    def __init__(self, scale_recip: bool = True):
+    def __init__(self, scale_recip: bool = True, div_unroll: int = 1):
         self._scale_recip = scale_recip
+        self._div_unroll = div_unroll
         super().__init__()
 
     def elaborate(self, platform):
         m = Module()
 
-        m.submodules.divider = divider = Divider(24, 1)
+        if self._scale_recip:
+            scaler = Scaler(self._div_unroll)
+        else:
+            scaler = PassthroughScaler()
+        m.submodules.scaler = scaler
 
         _a01 = self.triangle.payload.v0.y - self.triangle.payload.v1.y
         _a12 = self.triangle.payload.v1.y - self.triangle.payload.v2.y
@@ -172,8 +237,6 @@ class EdgeWalker(Component):
             w2_orient2d.c.eq(p),
         ]
 
-        area_recip = Signal(24)
-
         w0_row = Signal.like(w0_orient2d.res)
         w1_row = Signal.like(w1_orient2d.res)
         w2_row = Signal.like(w2_orient2d.res)
@@ -183,29 +246,13 @@ class EdgeWalker(Component):
         w2 = Signal.like(w2_row)
 
         m.d.comb += [
-            self.points.payload.p.eq(p),
-            divider.n.eq(0xFFFFFF),
+            scaler.points.payload.p.eq(p),
+            scaler.points.payload.w0.eq(w0),
+            scaler.points.payload.w1.eq(w1),
+            scaler.points.payload.w2.eq(w2),
+            scaler.area.eq(area_orient2d.res)
         ]
-        if self._scale_recip:
-            m.d.comb += [
-                divider.d.eq(area_orient2d.res),
-                self.points.payload.w0.eq(w0 * area_recip),
-                self.points.payload.w1.eq(w1 * area_recip),
-                self.points.payload.w2.eq(w2 * area_recip),
-            ]
-        else:
-            m.d.comb += [
-                self.points.payload.w0.eq(w0),
-                self.points.payload.w1.eq(w1),
-                self.points.payload.w2.eq(w2),
-            ]
-
-        div_done = Signal()
-        with m.If(divider.done):
-            m.d.sync += [
-                area_recip.eq(divider.o),
-                div_done.eq(1),
-            ]
+        wiring.connect(m, wiring.flipped(self.points), scaler.points_scaled)
 
         with m.FSM():
             with m.State("IDLE"):
@@ -222,7 +269,6 @@ class EdgeWalker(Component):
                         min_x.eq(_min_x),
                         max_x.eq(_max_x),
                         max_y.eq(_max_y),
-                        div_done.eq(0),
                     ]
                     m.next = "ORIENT2D_DELAY1"
             with m.State("ORIENT2D_DELAY1"):  # area cycle 1, w0/w1/w2 cycle 0
@@ -235,7 +281,7 @@ class EdgeWalker(Component):
                 with m.If(area_orient2d.res == 0):
                     m.next = "IDLE"
                 with m.Else():
-                    m.d.comb += divider.trigger.eq(1)
+                    m.d.comb += scaler.area_trigger.eq(1)
                     m.next = "ORIENT2D_DELAY4"
             with m.State("ORIENT2D_DELAY4"):  # w0/w1/w2 done
                 m.d.sync += [
@@ -263,13 +309,8 @@ class EdgeWalker(Component):
                         p.y.eq(p.y + 1),
                     ]
                 with m.Else():
-                    valid_point = Signal()
-                    m.d.comb += valid_point.eq((w0 | w1 | w2) >= 0)
-                    if self._scale_recip:
-                        m.d.comb += self.points.valid.eq(div_done & valid_point)
-                    else:
-                        m.d.comb += self.points.valid.eq(valid_point)
-                    with m.If(~valid_point | (self.points.valid & self.points.ready)):
+                    m.d.comb += scaler.points.valid.eq((w0 | w1 | w2) >= 0)
+                    with m.If(~scaler.points.valid | scaler.points.ready):
                         m.d.sync += [
                             w0.eq(w0 + a12),
                             w1.eq(w1 + a20),
