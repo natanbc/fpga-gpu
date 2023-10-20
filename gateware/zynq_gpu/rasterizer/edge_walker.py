@@ -231,28 +231,26 @@ class EdgeWalker(Component):
                     w0_row.eq(w0_orient2d.res),
                     w1_row.eq(w1_orient2d.res),
                     w2_row.eq(w2_orient2d.res),
+                    w0.eq(w0_orient2d.res),
+                    w1.eq(w1_orient2d.res),
+                    w2.eq(w2_orient2d.res),
+                    p.x.eq(min_x),
                 ]
-                m.next = "LOOP_Y"
-            with m.State("LOOP_Y"):
+                m.next = "WALK"
+            with m.State("WALK"):
                 with m.If(p.y > max_y):
                     m.next = "IDLE"
-                with m.Else():
-                    m.d.sync += [
-                        p.x.eq(min_x),
-                        w0.eq(w0_row),
-                        w1.eq(w1_row),
-                        w2.eq(w2_row),
-                    ]
-                    m.next = "LOOP_X"
-            with m.State("LOOP_X"):
-                with m.If(p.x > max_x):
+                with m.Elif(p.x > max_x):
                     m.d.sync += [
                         w0_row.eq(w0_row + b12),
                         w1_row.eq(w1_row + b20),
                         w2_row.eq(w2_row + b01),
+                        w0.eq(w0_row + b12),
+                        w1.eq(w1_row + b20),
+                        w2.eq(w2_row + b01),
+                        p.x.eq(min_x),
                         p.y.eq(p.y + 1),
                     ]
-                    m.next = "LOOP_Y"
                 with m.Else():
                     valid_point = Signal()
                     m.d.comb += valid_point.eq((w0 | w1 | w2) >= 0)
