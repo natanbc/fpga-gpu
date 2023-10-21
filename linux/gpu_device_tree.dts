@@ -19,7 +19,6 @@
         serial0 = "/amba/serial@e0001000";
         serial1 = "/amba/serial@e0000000";
         spi0 = "/amba/spi@e0007000";
-        gpuctrl = "/amba_pl/gpuctrl@40000000";
     };
 
     memory@0 {
@@ -47,10 +46,22 @@
         compatible = "simple-bus";
         ranges;
 
-        gpuctrl@40000000 {
+        display_controller@40000000 {
             compatible = "generic-uio";
-            reg = <0x40000000 0x40000000>;
+            reg = <0x40000000 0x1000>;
             interrupts = <0 29 0x04>;
+            interrupt-parent = <&intc>;
+        };
+
+        rasterizer@40001000 {
+            compatible = "generic-uio";
+            reg = <0x40001000 0x1000>;
+        };
+
+        audio@40002000 {
+            compatible = "generic-uio";
+            reg = <0x40002000 0x1000>;
+            interrupts = <0 30 0x04>;
             interrupt-parent = <&intc>;
         };
     };
