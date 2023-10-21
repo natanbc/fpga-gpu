@@ -353,7 +353,7 @@ class Rasterizer(Component):
             interpolator.in_ws[2].eq(walker.points.payload.w2),
         ]
 
-        m.submodules.fifo = fifo = SyncFIFOBuffered(width=23 + 4 * 8, depth=32)
+        m.submodules.fifo = fifo = SyncFIFOBuffered(width=23 + 4 * 8, depth=128)
         m.d.comb += fifo_empty.eq(~fifo.r_rdy)
 
         accept_interp = Signal()
