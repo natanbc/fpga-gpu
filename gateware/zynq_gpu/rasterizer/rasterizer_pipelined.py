@@ -296,6 +296,7 @@ class ZReader(Component):
             with m.If(c0_valid):
                 m.d.sync += last_addr.eq(c0_addr)
 
+        # TODO: replace this dirty hack with a proper skid buffer
         fifo_input = Cat(c1_addr, c1_offset, c1_same_addr)
         m.submodules.c1c2_fifo = c1c2_fifo = SyncFIFOBuffered(width=len(fifo_input), depth=2)
 
