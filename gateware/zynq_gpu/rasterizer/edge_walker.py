@@ -148,14 +148,33 @@ class Scaler(Component):
         with m.If(self.area_trigger):
             m.d.sync += div_done.eq(0)
 
-        m.d.comb += [
-            self.points.ready.eq(self.points_scaled.ready & div_done),
-            self.points_scaled.valid.eq(self.points.valid & div_done),
+        stall = Signal()
 
-            self.points_scaled.payload.p.eq(self.points.payload.p),
-            self.points_scaled.payload.w0.eq(self.points.payload.w0 * area_recip),
-            self.points_scaled.payload.w1.eq(self.points.payload.w1 * area_recip),
-            self.points_scaled.payload.w2.eq(self.points.payload.w2 * area_recip),
+        p = Signal(Point)
+        w0 = Signal(24)
+        w1 = Signal(24)
+        w2 = Signal(24)
+        valid = Signal()
+
+        with m.If(~stall):
+            m.d.sync += [
+                p.eq(self.points.payload.p),
+                w0.eq(self.points.payload.w0 * area_recip),
+                w1.eq(self.points.payload.w1 * area_recip),
+                w2.eq(self.points.payload.w2 * area_recip),
+                valid.eq(self.points.valid & div_done),
+            ]
+
+        m.d.comb += [
+            self.points.ready.eq(~stall & div_done),
+            self.points_scaled.valid.eq(valid),
+
+            stall.eq(valid & ~self.points_scaled.ready),
+
+            self.points_scaled.payload.p.eq(p),
+            self.points_scaled.payload.w0.eq(w0),
+            self.points_scaled.payload.w1.eq(w1),
+            self.points_scaled.payload.w2.eq(w2),
         ]
 
         return m

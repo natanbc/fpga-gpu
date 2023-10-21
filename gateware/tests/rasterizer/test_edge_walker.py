@@ -124,7 +124,8 @@ class EdgeWalkerTest(unittest.TestCase):
                 st[(x, y)] = (w0, w1, w2)
 
             for k, exp_v in exp_st.items():
-                v = st[k]
+                v = st.get(k)
+                assert v is not None, f"{k} missing"
                 assert exp_v == v, f"[{k}]: expected {exp_v}, got {v}"
 
         sim = Simulator(dut)
