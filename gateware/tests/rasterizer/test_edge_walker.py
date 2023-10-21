@@ -165,3 +165,6 @@ class EdgeWalkerTest(unittest.TestCase):
 
     def test_square_interp(self):
         self._test_interpolation([((2, 2), (8, 2), (2, 8)), ((8, 2), (8, 8), (2, 8))], True)
+
+    def test_reciprocals_dont_mix(self):
+        self._test_interpolation([((2, 2), (3, 2), (2, 3)), ((4, 4), (8, 4), (4, 8))], True)

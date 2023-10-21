@@ -182,22 +182,42 @@ class Scaler(Component):
         return m
 
 
+class FIFOScaler(Component):
+    area: In(24)
+    area_trigger: In(1)
+
+    points: In(PointStream)
+    points_scaled: Out(PointStream)
+
+    def __init__(self, div_unroll: int):
+        self._div_unroll = div_unroll
+        super().__init__()
+
+    def elaborate(self, platform):
+        # TODO: figure out how to avoid mixing area reciprocals for different triangles
+        raise Exception("unimplemented")
+
+
 class EdgeWalker(Component):
     triangle: In(TriangleStream)
     idle: Out(1)
     points: Out(PointStream)
 
     # Whether interpolation weights should be scaled by 1/area
-    def __init__(self, scale_recip: bool = True, div_unroll: int = 1):
+    def __init__(self, scale_recip: bool = True, *, div_unroll: int = 1, use_fifo: bool = False):
         self._scale_recip = scale_recip
         self._div_unroll = div_unroll
+        self._use_fifo = use_fifo
         super().__init__()
 
     def elaborate(self, platform):
         m = Module()
 
         if self._scale_recip:
-            scaler = Scaler(self._div_unroll)
+            if self._use_fifo:
+                scaler = FIFOScaler(self._div_unroll)
+            else:
+                scaler = Scaler(self._div_unroll)
         else:
             scaler = PassthroughScaler()
         m.submodules.scaler = scaler
