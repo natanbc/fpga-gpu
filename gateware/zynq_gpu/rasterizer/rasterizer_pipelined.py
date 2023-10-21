@@ -11,7 +11,7 @@ from ..zynq_ifaces import SAxiHP
 PointData = StructLayout({
     "x": unsigned(11),
     "y": unsigned(11),
-    "z": unsigned(8),
+    "z": unsigned(16),
     "r": unsigned(8),
     "g": unsigned(8),
     "b": unsigned(8),
@@ -35,7 +35,7 @@ class RasterizerInterpolator(Component):
     r: In(ArrayLayout(8, 3))
     g: In(ArrayLayout(8, 3))
     b: In(ArrayLayout(8, 3))
-    z: In(ArrayLayout(8, 3))
+    z: In(ArrayLayout(16, 3))
 
     idle: Out(1)
 
@@ -50,7 +50,7 @@ class RasterizerInterpolator(Component):
     out_r: Out(8)
     out_g: Out(8)
     out_b: Out(8)
-    out_z: Out(8)
+    out_z: Out(16)
 
     def elaborate(self, platform):
         m = Module()
@@ -100,7 +100,7 @@ class RasterizerInterpolator(Component):
         c2_r_scaled = Array(Signal(32, name=f"r_scaled_{i}", reset_less=True) for i in range(3))
         c2_g_scaled = Array(Signal(32, name=f"g_scaled_{i}", reset_less=True) for i in range(3))
         c2_b_scaled = Array(Signal(32, name=f"b_scaled_{i}", reset_less=True) for i in range(3))
-        c2_z_scaled = Array(Signal(32, name=f"z_scaled_{i}", reset_less=True) for i in range(3))
+        c2_z_scaled = Array(Signal(40, name=f"z_scaled_{i}", reset_less=True) for i in range(3))
         c2_p_offset = Signal(23, reset_less=True)
         c2_valid = Signal()
 
@@ -129,7 +129,7 @@ class RasterizerInterpolator(Component):
         c3_r = Signal(8, reset_less=True)
         c3_g = Signal(8, reset_less=True)
         c3_b = Signal(8, reset_less=True)
-        c3_z = Signal(8, reset_less=True)
+        c3_z = Signal(16, reset_less=True)
         c3_p_offset = Signal(23, reset_less=True)
         c3_valid = Signal()
 
@@ -173,7 +173,7 @@ class RasterizerDepthTester(Component):
     in_r: In(8)
     in_g: In(8)
     in_b: In(8)
-    in_z: In(8)
+    in_z: In(16)
 
     out_ready: In(1)
     out_valid: Out(1)
@@ -181,7 +181,7 @@ class RasterizerDepthTester(Component):
     out_r: Out(8)
     out_g: Out(8)
     out_b: Out(8)
-    out_z: Out(8)
+    out_z: Out(16)
     
     zst_ready: Out(1)
     zst_valid: In(1)
@@ -196,8 +196,8 @@ class RasterizerDepthTester(Component):
         r = Signal(8, reset_less=True)
         g = Signal(8, reset_less=True)
         b = Signal(8, reset_less=True)
-        z = Signal(8, reset_less=True)
-        fetched_z = Signal(8, reset_less=True)
+        z = Signal(16, reset_less=True)
+        fetched_z = Signal(16, reset_less=True)
         valid_data = Signal()
 
         with m.If(~stall):
@@ -210,7 +210,7 @@ class RasterizerDepthTester(Component):
                 g.eq(self.in_g),
                 b.eq(self.in_b),
                 z.eq(self.in_z),
-                fetched_z.eq(self.zst_word.word_select(self.in_p_offset[:3], 8)),
+                fetched_z.eq(self.zst_word.word_select(self.in_p_offset[:2], 16)),
                 valid_data.eq(self.zst_ready & self.zst_valid),
             ]
 
@@ -353,14 +353,14 @@ class Rasterizer(Component):
             interpolator.in_ws[2].eq(walker.points.payload.w2),
         ]
 
-        m.submodules.fifo = fifo = SyncFIFOBuffered(width=23 + 4 * 8, depth=128)
+        m.submodules.fifo = fifo = SyncFIFOBuffered(width=23 + 3 * 8 + 16, depth=128)
         m.d.comb += fifo_empty.eq(~fifo.r_rdy)
 
         accept_interp = Signal()
         m.d.comb += [
             accept_interp.eq(fifo.w_rdy & self.axi2.read_address.ready),
             self.axi2.read_address.addr.eq(
-                Cat(C(0, 3), (self.z_base + interpolator.out_p_offset)[3:]),
+                Cat(C(0, 3), (self.z_base + interpolator.out_p_offset*2)[3:]),
             ),
             self.axi2.read_address.burst.eq(0b01),    # INCR
             self.axi2.read_address.size.eq(0b11),     # 8 bytes/beat
@@ -396,14 +396,14 @@ class Rasterizer(Component):
 
         accept_pix = Signal()
         m.d.comb += [
-            self.axi2.write_address.addr.eq(Cat(C(0, 3), (self.z_base + depth_tester.out_p_offset)[3:])),
+            self.axi2.write_address.addr.eq(Cat(C(0, 3), (self.z_base + depth_tester.out_p_offset*2)[3:])),
             self.axi2.write_address.burst.eq(0b01),    # INCR
             self.axi2.write_address.size.eq(0b11),     # 8 bytes/beat
             self.axi2.write_address.len.eq(0),
             self.axi2.write_address.cache.eq(0b1111),
 
-            self.axi2.write_data.data.eq(depth_tester.out_z.replicate(8)),
-            self.axi2.write_data.strb.eq(1 << depth_tester.out_p_offset[:3]),
+            self.axi2.write_data.data.eq(depth_tester.out_z.replicate(4)),
+            self.axi2.write_data.strb.eq(0b11 << (depth_tester.out_p_offset[:2] * 2)),
             self.axi2.write_data.last.eq(1),
 
             self.axi2.write_response.ready.eq(1),

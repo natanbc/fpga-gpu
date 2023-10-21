@@ -10,7 +10,7 @@ from ..zynq_ifaces import SAxiHP
 PointData = StructLayout({
     "x": unsigned(11),
     "y": unsigned(11),
-    "z": unsigned(8),
+    "z": unsigned(16),
     "r": unsigned(8),
     "g": unsigned(8),
     "b": unsigned(8),
@@ -53,7 +53,7 @@ class Rasterizer(Component):
             for sig in ["x", "y"]:
                 m.d.comb += getattr(walker_vertex, sig).eq(getattr(input_vertex, sig))
 
-        zs = Array(Signal(8) for _ in range(3))
+        zs = Array(Signal(16) for _ in range(3))
         rs = Array(Signal(8) for _ in range(3))
         gs = Array(Signal(8) for _ in range(3))
         bs = Array(Signal(8) for _ in range(3))
@@ -61,7 +61,7 @@ class Rasterizer(Component):
 
         p = Point(Signal(Point))
 
-        z_interp = Signal(8)
+        z_interp = Signal(16)
 
         compute_interps = Signal(range(4), reset=3)
         r_interp = Signal(8)
@@ -81,22 +81,22 @@ class Rasterizer(Component):
             ), compute_interps.eq(compute_interps + 1)
 
         fetch_z = Signal()
-        fetch_z_addr = Signal(32)
-        fetch_z_offset = Signal(3)
+        fetch_z_offset = Signal(2)
         fetch_z_read = Signal()
         fetch_z_done = Signal()
-        fetched_z = Signal(8)
+        fetched_z = Signal(16)
         with m.If(fetch_z):
+            fetch_z_xy = Signal(32)
             m.d.comb += [
-                fetch_z_addr.eq(self.z_base + self.width * p.y + p.x),
+                fetch_z_xy.eq(self.width * p.y + p.x),
                 self.axi2.read_address.valid.eq(1),
-                self.axi2.read_address.addr.eq(Cat(C(0, 3), fetch_z_addr[3:])),
+                self.axi2.read_address.addr.eq(Cat(C(0, 3), (self.z_base + fetch_z_xy * 2)[3:])),
                 self.axi2.read_address.burst.eq(0b01),  # INCR
                 self.axi2.read_address.size.eq(0b11),   # 8 bytes/beat
                 self.axi2.read_address.len.eq(0),
             ]
             m.d.sync += [
-                fetch_z_offset.eq(fetch_z_addr),
+                fetch_z_offset.eq(fetch_z_xy[:2]),
             ]
             with m.If(self.axi2.read_address.ready):
                 m.d.sync += [
@@ -108,27 +108,27 @@ class Rasterizer(Component):
             with m.If(self.axi2.read.valid):
                 m.d.sync += fetch_z_read.eq(0)
                 m.d.comb += [
-                    fetched_z.eq(self.axi2.read.data.word_select(fetch_z_offset, 8)),
+                    fetched_z.eq(self.axi2.read.data.word_select(fetch_z_offset, 16)),
                     fetch_z_done.eq(1),
                 ]
 
         write_z = Signal()
-        write_z_addr = Signal(32)
-        write_z_offset = Signal(3)
+        write_z_offset = Signal(2)
         write_z_write = Signal()
         write_z_done = Signal()
         m.d.comb += self.axi2.write_response.ready.eq(1)
         with m.If(write_z):
+            write_z_xy = Signal(32)
             m.d.comb += [
-                write_z_addr.eq(self.z_base + self.width * p.y + p.x),
+                write_z_xy.eq(self.width * p.y + p.x),
                 self.axi2.write_address.valid.eq(1),
-                self.axi2.write_address.addr.eq(Cat(C(0, 3), write_z_addr[3:])),
+                self.axi2.write_address.addr.eq(Cat(C(0, 3), (self.z_base + write_z_xy * 2)[3:])),
                 self.axi2.write_address.burst.eq(0b01),  # INCR
                 self.axi2.write_address.size.eq(0b11),   # 8 bytes/beat
                 self.axi2.write_address.len.eq(0),
             ]
             m.d.sync += [
-                write_z_offset.eq(write_z_addr),
+                write_z_offset.eq(write_z_xy[:2]),
             ]
             with m.If(self.axi2.write_address.ready):
                 m.d.sync += [
@@ -139,8 +139,8 @@ class Rasterizer(Component):
             m.d.comb += [
                 self.axi2.write_data.valid.eq(1),
                 self.axi2.write_data.last.eq(1),
-                self.axi2.write_data.data.eq(z_interp.replicate(8)),
-                self.axi2.write_data.strb.eq(1 << write_z_offset),
+                self.axi2.write_data.data.eq(z_interp.replicate(4)),
+                self.axi2.write_data.strb.eq(0b11 << (write_z_offset * 2)),
             ]
 
             with m.If(self.axi2.write_data.ready):

@@ -30,11 +30,11 @@ class RasterizerTest(unittest.TestCase):
 
         dut = mod(*args, **kwargs)
 
-        mem = bytearray(width * height * 3 + width * height)
+        mem = bytearray(width * height * 3 + width * height * 2)
         fb_base = 0x1000_0000
         fb_end = 0x1000_0000 + width * height * 3
         z_base = fb_end
-        z_end = z_base + width * height
+        z_end = z_base + width * height * 2
 
         expected_mem = bytearray(len(mem))
         expected_z_off = width * height * 3
@@ -74,9 +74,10 @@ class RasterizerTest(unittest.TestCase):
         def submit_trig(t: Triangle):
             for v in points_raster(t.v0, t.v1, t.v2):
                 off = width*v.y + v.x
-                z_actual = expected_mem[expected_z_off + off]
+                z_off = expected_z_off + off*2
+                z_actual = struct.unpack("<H", expected_mem[z_off:z_off+2])[0]
                 if z_actual < v.z:
-                    expected_mem[expected_z_off + off] = v.z
+                    expected_mem[z_off:z_off+2] = struct.pack("<H", v.z)
                     expected_mem[off*3:(off + 1)*3] = bytes([v.b, v.g, v.r])
 
             for v in ["v0", "v1", "v2"]:
@@ -93,15 +94,15 @@ class RasterizerTest(unittest.TestCase):
             yield dut.z_base.eq(0x1000_0000 + width*height*3)
 
             n = 10
-            v0 = Vertex(0, 0, 3, 0xFF, 0x00, 0x00)
-            v1 = Vertex(n, 0, 3, 0x00, 0xFF, 0x00)
-            v2 = Vertex(0, n, 3, 0x00, 0x00, 0xFF)
-            v3 = Vertex(n, n, 3, 0xFF, 0x00, 0x00)
+            v0 = Vertex(0, 0, 0xFF00 | 3, 0xFF, 0x00, 0x00)
+            v1 = Vertex(n, 0, 0xFF00 | 3, 0x00, 0xFF, 0x00)
+            v2 = Vertex(0, n, 0xFF00 | 3, 0x00, 0x00, 0xFF)
+            v3 = Vertex(n, n, 0xFF00 | 3, 0xFF, 0x00, 0x00)
 
             # Draw behind the previous region, shouldn't show up
-            b1 = Vertex(0, 0, 2, 0xFF, 0xFF, 0xFF)
-            b2 = Vertex(3, 0, 2, 0xFF, 0xFF, 0xFF)
-            b3 = Vertex(0, 3, 2, 0xFF, 0xFF, 0xFF)
+            b1 = Vertex(0, 0, 0xFF00 | 2, 0xFF, 0xFF, 0xFF)
+            b2 = Vertex(3, 0, 0xFF00 | 2, 0xFF, 0xFF, 0xFF)
+            b3 = Vertex(0, 3, 0xFF00 | 2, 0xFF, 0xFF, 0xFF)
 
             yield from submit_trig(Triangle(v0, v1, v2))
             yield from submit_trig(Triangle(v1, v3, v2))
@@ -135,7 +136,7 @@ class RasterizerTest(unittest.TestCase):
         if expected_mem != mem:
             for idx in range(len(expected_mem)):
                 if expected_mem[idx] != mem[idx]:
-                    offset, tp = (idx - expected_z_off, "z") if idx >= expected_z_off else (idx // 3, "rgb")
+                    offset, tp = ((idx - expected_z_off) // 2, "z") if idx >= expected_z_off else (idx // 3, "rgb")
                     y = offset // width
                     x = offset % width
                     print(f"Mismatch @ {tp}[{x},{y}/{hex(idx + 0x1000_0000)}/"
