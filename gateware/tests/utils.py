@@ -49,6 +49,7 @@ class AxiAddress:
     bytes_per_beat: int
     burst_length: int
     id: int
+    clock: int
 
 
 @dataclass
@@ -108,19 +109,35 @@ class AxiEmulator:
                  write: Optional[Callable[[int, int, int, int], None]],
                  ar_buffer: int = 1,
                  aw_buffer: int = 1,
-                 w_buffer: int = 1):
+                 w_buffer: int = 1,
+                 read_latency: int = 0,
+                 write_latency: int = 0):
         if read is None and write is None:
             raise ValueError("At least one of read/write functions should be present")
+        self._clock = 0
+
         self._iface = interface
         self._ar_q = Queue[AxiAddress](ar_buffer)
         self._aw_q = Queue[AxiAddress](aw_buffer)
         self._w_q = Queue[AxiWriteData](w_buffer)
         self._read = read
         self._write = write
+        self._read_latency = read_latency
+        self._write_latency = write_latency
+        self._added = False
 
     def add_to_sim(self, sim, domain="sync"):
-        for p in [self._ar, self._r, self._aw, self._w, self._b]:
+        if self._added:
+            raise ValueError("Simulator can only be used once")
+        self._added = True
+
+        for p in [self._ar, self._r, self._aw, self._w, self._b, self._clock_counter]:
             sim.add_sync_process(_wrap(p), domain=domain)
+
+    def _clock_counter(self):
+        while True:
+            yield
+            self._clock += 1
 
     def _address_channel(self, channel, queue, is_read):
         while True:
@@ -139,6 +156,7 @@ class AxiEmulator:
                 1 << (yield channel.size),
                 (yield channel.len) + 1,
                 (yield channel.id),
+                self._clock + (self._read_latency if is_read else self._write_latency),
             ))
 
     def _ar(self):
@@ -150,6 +168,8 @@ class AxiEmulator:
             while not self._ar_q.r_rdy():
                 yield
             op = self._ar_q.read()
+            while self._clock < op.clock:
+                yield
             for i, addr in enumerate(_addr_gen(op)):
                 value = self._read(addr, op.bytes_per_beat)
                 yield r.valid.eq(1)
@@ -189,6 +209,8 @@ class AxiEmulator:
             while not self._aw_q.r_rdy():
                 yield
             op = self._aw_q.read()
+            while self._clock < op.clock:
+                yield
             for i, addr in enumerate(_addr_gen(op)):
                 while not self._w_q.r_rdy():
                     yield
