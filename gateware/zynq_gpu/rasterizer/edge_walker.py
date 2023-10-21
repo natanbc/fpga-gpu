@@ -97,7 +97,9 @@ class Orient2D(Component):
             by_ay_cx_ax_2.eq(by_ay_cx_ax),
         ]
 
-        m.d.comb += self.res.eq(bx_ax_cy_ay_2 - by_ay_cx_ax_2)
+        # Cycle 3
+
+        m.d.sync += self.res.eq(bx_ax_cy_ay_2 - by_ay_cx_ax_2)
 
         return m
 
@@ -294,15 +296,17 @@ class EdgeWalker(Component):
                 # safe to change, values already in the pipeline
                 m.d.comb += self.triangle.ready.eq(1)
                 m.next = "ORIENT2D_DELAY2"
-            with m.State("ORIENT2D_DELAY2"):  # area cycle 2, w0/w1/w2 cycle 2
+            with m.State("ORIENT2D_DELAY2"):  # area cycle 2, w0/w1/w2 cycle 1
                 m.next = "ORIENT2D_DELAY3"
-            with m.State("ORIENT2D_DELAY3"):  # area done, w0/w1/w2 cycle 2
+            with m.State("ORIENT2D_DELAY3"):  # area cycle 3, w0/w1/w2 cycle 2
+                m.next = "ORIENT2D_DELAY4"
+            with m.State("ORIENT2D_DELAY4"):  # area done, w0/w1/w2 cycle 3
                 with m.If(area_orient2d.res == 0):
                     m.next = "IDLE"
                 with m.Else():
                     m.d.comb += scaler.area_trigger.eq(1)
-                    m.next = "ORIENT2D_DELAY4"
-            with m.State("ORIENT2D_DELAY4"):  # w0/w1/w2 done
+                    m.next = "ORIENT2D_DELAY5"
+            with m.State("ORIENT2D_DELAY5"):  # w0/w1/w2 done
                 m.d.sync += [
                     w0_row.eq(w0_orient2d.res),
                     w1_row.eq(w1_orient2d.res),
