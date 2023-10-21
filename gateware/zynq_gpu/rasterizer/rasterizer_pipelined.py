@@ -59,12 +59,12 @@ class RasterizerInterpolator(Component):
         stall_input = Signal()
         stall_c3 = Signal()
 
-        c0_r = Signal.like(self.r)
-        c0_g = Signal.like(self.g)
-        c0_b = Signal.like(self.b)
-        c0_z = Signal.like(self.z)
-        c0_p = Signal.like(self.in_p)
-        c0_ws = Signal.like(self.in_ws)
+        c0_r = Signal.like(self.r, reset_less=True)
+        c0_g = Signal.like(self.g, reset_less=True)
+        c0_b = Signal.like(self.b, reset_less=True)
+        c0_z = Signal.like(self.z, reset_less=True)
+        c0_p = Signal.like(self.in_p, reset_less=True)
+        c0_ws = Signal.like(self.in_ws, reset_less=True)
         c0_valid = Signal()
 
         with m.If(~stall_input):
@@ -78,12 +78,12 @@ class RasterizerInterpolator(Component):
                 c0_valid.eq(self.in_valid),
             ]
 
-        c1_r = Signal.like(self.r)
-        c1_g = Signal.like(self.g)
-        c1_b = Signal.like(self.b)
-        c1_z = Signal.like(self.z)
-        c1_p = Signal.like(self.in_p)
-        c1_ws = Signal.like(self.in_ws)
+        c1_r = Signal.like(self.r, reset_less=True)
+        c1_g = Signal.like(self.g, reset_less=True)
+        c1_b = Signal.like(self.b, reset_less=True)
+        c1_z = Signal.like(self.z, reset_less=True)
+        c1_p = Signal.like(self.in_p, reset_less=True)
+        c1_ws = Signal.like(self.in_ws, reset_less=True)
         c1_valid = Signal()
 
         with m.If(~stall_input):
@@ -308,6 +308,7 @@ class Rasterizer(Component):
         "depth_store_addr": 32,
         "depth_store_data": 32,
         "pixel_store": 32,
+        "depth_fifo_buckets": ArrayLayout(32, 8),
     }))
 
     data: In(RasterizerData)
@@ -371,10 +372,10 @@ class Rasterizer(Component):
                 for sig in "rgbz":
                     m.d.sync += getattr(interpolator, sig)[vertex_idx].eq(getattr(input_vertex, sig))
 
+        m.d.sync += stall_walker.eq(walker.points.valid & ~walker.points.ready)
         m.d.comb += [
             walker.points.ready.eq(interpolator.in_ready),
             interpolator.in_valid.eq(walker.points.valid),
-            stall_walker.eq(walker.points.valid & ~walker.points.ready),
 
             interpolator.in_p.eq(walker.points.payload.p),
             interpolator.in_ws[0].eq(walker.points.payload.w0),
@@ -382,10 +383,21 @@ class Rasterizer(Component):
             interpolator.in_ws[2].eq(walker.points.payload.w2),
         ]
 
-        m.submodules.fifo = fifo = SyncFIFOBuffered(width=23 + 3 * 8 + 16, depth=128)
+        m.submodules.fifo = fifo = SyncFIFOBuffered(width=23 + 3 * 8 + 16, depth=32)
         m.d.comb += fifo_empty.eq(~fifo.r_rdy)
 
+        m.d.sync += [
+            self.stall_cycles.depth_fifo_buckets[fifo.level[2:]].eq(
+                self.stall_cycles.depth_fifo_buckets[fifo.level[2:]] + 1
+            ),
+        ]
+
         accept_interp = Signal()
+
+        m.d.sync += [
+            stall_depth_load_addr.eq(interpolator.out_valid & ~self.axi2.read_address.ready),
+            stall_depth_fifo.eq(interpolator.out_valid & ~fifo.r_rdy),
+        ]
         m.d.comb += [
             accept_interp.eq(fifo.w_rdy & self.axi2.read_address.ready),
             self.axi2.read_address.addr.eq(
@@ -397,9 +409,6 @@ class Rasterizer(Component):
             self.axi2.read_address.cache.eq(0b1111),
 
             interpolator.out_ready.eq(accept_interp),
-
-            stall_depth_load_addr.eq(interpolator.out_valid & ~self.axi2.read_address.ready),
-            stall_depth_fifo.eq(interpolator.out_valid & ~fifo.r_rdy),
 
 
             fifo.w_en.eq(interpolator.out_valid & self.axi2.read_address.ready),
@@ -427,6 +436,12 @@ class Rasterizer(Component):
         ]
 
         accept_pix = Signal()
+
+        m.d.sync += [
+            stall_depth_store_addr.eq(depth_tester.out_valid & ~self.axi2.write_address.ready),
+            stall_depth_store_data.eq(depth_tester.out_valid & ~self.axi2.write_data.ready),
+            stall_pixel_store.eq(depth_tester.out_valid & ~writer.ready),
+        ]
         m.d.comb += [
             self.axi2.write_address.addr.eq(Cat(C(0, 3), (self.z_base + depth_tester.out_p_offset*2)[3:])),
             self.axi2.write_address.burst.eq(0b01),    # INCR
@@ -441,10 +456,6 @@ class Rasterizer(Component):
             self.axi2.write_response.ready.eq(1),
 
             accept_pix.eq(writer.ready & self.axi2.write_data.ready & self.axi2.write_address.ready),
-
-            stall_depth_store_addr.eq(depth_tester.out_valid & ~self.axi2.write_address.ready),
-            stall_depth_store_data.eq(depth_tester.out_valid & ~self.axi2.write_data.ready),
-            stall_pixel_store.eq(depth_tester.out_valid & ~writer.ready),
 
             self.axi2.write_address.valid.eq(depth_tester.out_valid & writer.ready & self.axi2.write_data.ready),
             self.axi2.write_data.valid.eq(depth_tester.out_valid & writer.ready & self.axi2.write_address.ready),
