@@ -185,7 +185,7 @@ class RasterizerDepthTester(Component):
     
     zst_ready: Out(1)
     zst_valid: In(1)
-    zst_word: In(64)
+    zst_z: In(16)
 
     def elaborate(self, platform):
         m = Module()
@@ -210,7 +210,7 @@ class RasterizerDepthTester(Component):
                 g.eq(self.in_g),
                 b.eq(self.in_b),
                 z.eq(self.in_z),
-                fetched_z.eq(self.zst_word.word_select(self.in_p_offset[:2], 16)),
+                fetched_z.eq(self.zst_z),
                 valid_data.eq(self.zst_ready & self.zst_valid),
             ]
 
@@ -233,6 +233,122 @@ class RasterizerDepthTester(Component):
             self.out_b.eq(b),
             self.out_z.eq(z),
         ]
+
+        return m
+
+
+class ZReader(Component):
+    read_address: Out(SAxiHP.members["read_address"].signature)
+    read: Out(SAxiHP.members["read"].signature)
+
+    in_addr_ready: Out(1)
+    in_addr_valid: In(1)
+    in_addr: In(32)
+
+    out_z_ready: In(1)
+    out_z_valid: Out(1)
+    out_z: Out(16)
+
+    def elaborate(self, platform):
+        m = Module()
+
+        m.d.comb += [
+            self.read_address.burst.eq(0b01),    # INCR
+            self.read_address.size.eq(0b11),     # 8 bytes/beat
+            self.read_address.len.eq(0),
+            self.read_address.cache.eq(0b1111),
+        ]
+
+        m.submodules.same_addr_fifo = fifo = SyncFIFOBuffered(width=3, depth=32)
+
+        stall_c0 = Signal()
+        stall_c1 = Signal()
+        stall_c2 = Signal()
+
+        last_addr = Signal(32, reset=1)
+
+        in_addr_word = Signal(32)
+        m.d.comb += in_addr_word.eq(Cat(C(0, 3), self.in_addr[3:]))
+
+        c0_addr = Signal(32)
+        c0_offset = Signal(2)
+        c0_valid = Signal()
+
+        with m.If(~stall_c0):
+            m.d.sync += [
+                c0_addr.eq(in_addr_word),
+                c0_offset.eq(self.in_addr[1:3]),
+                c0_valid.eq(self.in_addr_valid),
+            ]
+
+        c1_addr = Signal(32)
+        c1_offset = Signal(2)
+        c1_same_addr = Signal()
+        c1_valid = Signal()
+
+        with m.If(~stall_c1):
+            m.d.sync += [
+                c1_addr.eq(c0_addr),
+                c1_offset.eq(c0_offset),
+                c1_same_addr.eq(c0_addr == last_addr),
+                c1_valid.eq(c0_valid),
+            ]
+            with m.If(c0_valid):
+                m.d.sync += last_addr.eq(c0_addr)
+
+        fifo_input = Cat(c1_addr, c1_offset, c1_same_addr)
+        m.submodules.c1c2_fifo = c1c2_fifo = SyncFIFOBuffered(width=len(fifo_input), depth=2)
+
+        c1c2_addr = Signal(32)
+        c1c2_offset = Signal(2)
+        c1c2_same_addr = Signal()
+        c1c2_valid = Signal()
+
+        m.d.comb += [
+            c1c2_fifo.w_data.eq(fifo_input),
+            c1c2_fifo.w_en.eq(c1_valid),
+
+            Cat(c1c2_addr, c1c2_offset, c1c2_same_addr).eq(c1c2_fifo.r_data),
+            c1c2_fifo.r_en.eq(~stall_c2),
+            c1c2_valid.eq(c1c2_fifo.r_rdy),
+        ]
+
+        with m.If(~stall_c2):
+            m.d.comb += [
+                self.read_address.valid.eq(c1c2_valid & ~c1c2_same_addr),
+                self.read_address.addr.eq(c1c2_addr),
+                fifo.w_en.eq(c1c2_valid),
+                fifo.w_data.eq(Cat(c1c2_same_addr, c1c2_offset)),
+            ]
+
+        m.d.comb += [
+            self.in_addr_ready.eq(~stall_c0),
+            stall_c0.eq(c0_valid & stall_c1),
+            stall_c1.eq(c1_valid & ~c1c2_fifo.w_rdy),
+            stall_c2.eq(~fifo.w_rdy | ~self.read_address.ready),
+        ]
+
+        # ================================
+
+        last_word = Signal(64)
+
+        r_same_addr = Signal()
+        r_offset = Signal(2)
+        m.d.comb += [
+            Cat(r_same_addr, r_offset).eq(fifo.r_data),
+
+            self.read.ready.eq((fifo.r_rdy & ~r_same_addr) & self.out_z_ready),
+            fifo.r_en.eq(self.out_z_ready & self.out_z_valid),
+
+            self.out_z.eq(Mux(
+                r_same_addr,
+                last_word.word_select(r_offset, 16),
+                self.read.data.word_select(r_offset, 16),
+            )),
+            self.out_z_valid.eq(self.read.valid | (fifo.r_rdy & r_same_addr)),
+        ]
+        with m.If(self.read.ready & self.read.valid):
+            m.d.sync += last_word.eq(self.read.data)
 
         return m
 
@@ -350,10 +466,6 @@ class Rasterizer(Component):
             writer.fb_base.eq(self.fb_base),
             writer.width.eq(self.width),
 
-            depth_tester.zst_valid.eq(self.axi2.read.valid),
-            self.axi2.read.ready.eq(depth_tester.zst_ready),
-            depth_tester.zst_word.eq(self.axi2.read.data),
-
             self.idle.eq(walker.idle & interpolator.idle & fifo_empty & depth_tester.idle & writer.idle),
         ]
         wiring.connect(m, wiring.flipped(self.axi), writer.axi)
@@ -396,25 +508,22 @@ class Rasterizer(Component):
 
         accept_interp = Signal()
 
+        m.submodules.z_reader = z_reader = ZReader()
+        wiring.connect(m, wiring.flipped(self.axi2.read_address), z_reader.read_address)
+        wiring.connect(m, wiring.flipped(self.axi2.read), z_reader.read)
+
         m.d.sync += [
             stall_depth_load_addr.eq(interpolator.out_valid & ~self.axi2.read_address.ready),
             stall_depth_fifo.eq(interpolator.out_valid & ~fifo.r_rdy),
         ]
         m.d.comb += [
-            accept_interp.eq(fifo.w_rdy & self.axi2.read_address.ready),
-            self.axi2.read_address.addr.eq(
-                Cat(C(0, 3), (self.z_base + interpolator.out_p_offset*2)[3:]),
-            ),
-            self.axi2.read_address.burst.eq(0b01),    # INCR
-            self.axi2.read_address.size.eq(0b11),     # 8 bytes/beat
-            self.axi2.read_address.len.eq(0),
-            self.axi2.read_address.cache.eq(0b1111),
+            accept_interp.eq(fifo.w_rdy & z_reader.in_addr_ready),
+            z_reader.in_addr.eq(self.z_base + interpolator.out_p_offset*2),
 
             interpolator.out_ready.eq(accept_interp),
 
-
-            fifo.w_en.eq(interpolator.out_valid & self.axi2.read_address.ready),
-            self.axi2.read_address.valid.eq(interpolator.out_valid & fifo.w_rdy),
+            fifo.w_en.eq(interpolator.out_valid & z_reader.in_addr_ready),
+            z_reader.in_addr_valid.eq(interpolator.out_valid & fifo.w_rdy),
 
             fifo.w_data.eq(Cat(
                 interpolator.out_b,
@@ -435,6 +544,10 @@ class Rasterizer(Component):
                 depth_tester.in_z,
                 depth_tester.in_p_offset,
             ).eq(fifo.r_data),
+
+            depth_tester.zst_valid.eq(z_reader.out_z_valid),
+            z_reader.out_z_ready.eq(depth_tester.zst_ready),
+            depth_tester.zst_z.eq(z_reader.out_z),
         ]
 
         accept_pix = Signal()
