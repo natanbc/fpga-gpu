@@ -301,13 +301,15 @@ class Rasterizer(Component):
     z_base: In(32)
     fb_base: In(32)
 
-    stall_cycles: Out(StructLayout({
-        "walker": 32,
-        "depth_load_addr": 32,
-        "depth_fifo": 32,
-        "depth_store_addr": 32,
-        "depth_store_data": 32,
-        "pixel_store": 32,
+    perf_counters: Out(StructLayout({
+        "stalls": StructLayout({
+            "walker": 32,
+            "depth_load_addr": 32,
+            "depth_fifo": 32,
+            "depth_store_addr": 32,
+            "depth_store_data": 32,
+            "pixel_store": 32,
+        }),
         "depth_fifo_buckets": ArrayLayout(32, 8),
     }))
 
@@ -323,17 +325,17 @@ class Rasterizer(Component):
         stall_depth_store_data = Signal()
         stall_pixel_store = Signal()
         with m.If(stall_walker):
-            m.d.sync += self.stall_cycles.walker.eq(self.stall_cycles.walker + 1)
+            m.d.sync += self.perf_counters.stalls.walker.eq(self.perf_counters.stalls.walker + 1)
         with m.If(stall_depth_load_addr):
-            m.d.sync += self.stall_cycles.depth_load_addr.eq(self.stall_cycles.depth_load_addr + 1)
+            m.d.sync += self.perf_counters.stalls.depth_load_addr.eq(self.perf_counters.stalls.depth_load_addr + 1)
         with m.If(stall_depth_fifo):
-            m.d.sync += self.stall_cycles.depth_fifo.eq(self.stall_cycles.depth_fifo + 1)
+            m.d.sync += self.perf_counters.stalls.depth_fifo.eq(self.perf_counters.stalls.depth_fifo + 1)
         with m.If(stall_depth_store_addr):
-            m.d.sync += self.stall_cycles.depth_store_addr.eq(self.stall_cycles.depth_store_addr + 1)
+            m.d.sync += self.perf_counters.stalls.depth_store_addr.eq(self.perf_counters.stalls.depth_store_addr + 1)
         with m.If(stall_depth_store_data):
-            m.d.sync += self.stall_cycles.depth_store_data.eq(self.stall_cycles.depth_store_data + 1)
+            m.d.sync += self.perf_counters.stalls.depth_store_data.eq(self.perf_counters.stalls.depth_store_data + 1)
         with m.If(stall_pixel_store):
-            m.d.sync += self.stall_cycles.pixel_store.eq(self.stall_cycles.pixel_store + 1)
+            m.d.sync += self.perf_counters.stalls.pixel_store.eq(self.perf_counters.stalls.pixel_store + 1)
 
         m.submodules.walker = walker = EdgeWalker()
         m.submodules.interpolator = interpolator = RasterizerInterpolator()
@@ -387,8 +389,8 @@ class Rasterizer(Component):
         m.d.comb += fifo_empty.eq(~fifo.r_rdy)
 
         m.d.sync += [
-            self.stall_cycles.depth_fifo_buckets[fifo.level[2:]].eq(
-                self.stall_cycles.depth_fifo_buckets[fifo.level[2:]] + 1
+            self.perf_counters.depth_fifo_buckets[fifo.level[2:]].eq(
+                self.perf_counters.depth_fifo_buckets[fifo.level[2:]] + 1
             ),
         ]
 
