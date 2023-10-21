@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 
-__all__ = ["points", "points_recip", "Vertex", "BarycentricCoordinates"]
+__all__ = ["points", "points_recip", "points_raster", "Vertex", "BarycentricCoordinates"]
 
 
 class Point2D:
@@ -83,3 +83,22 @@ def points_recip(v0: Vertex, v1: Vertex, v2: Vertex) -> Iterable[BarycentricCoor
     area_recip = 0xFFFFFF // area
     for c in points(v0, v1, v2):
         yield BarycentricCoordinates(c.x, c.y, c.w0*area_recip, c.w1*area_recip, c.w2*area_recip)
+
+
+def points_raster(v0: Vertex, v1: Vertex, v2: Vertex) -> Iterable[Vertex]:
+    def interp(bc, attr):
+        return sum([
+            getattr(v0, attr) * bc.w0,
+            getattr(v1, attr) * bc.w1,
+            getattr(v2, attr) * bc.w2,
+            (1 << 23)
+        ]) >> 24
+    for c in points_recip(v0, v1, v2):
+        yield Vertex(
+            c.x,
+            c.y,
+            interp(c, "z"),
+            interp(c, "r"),
+            interp(c, "g"),
+            interp(c, "b"),
+        )
