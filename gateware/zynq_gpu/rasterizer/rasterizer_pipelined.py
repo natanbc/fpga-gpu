@@ -514,7 +514,7 @@ class Rasterizer(Component):
         wiring.connect(m, wiring.flipped(self.axi2.read), z_reader.read)
 
         m.d.sync += [
-            stall_depth_load_addr.eq(interpolator.out_valid & ~self.axi2.read_address.ready),
+            stall_depth_load_addr.eq(interpolator.out_valid & ~z_reader.in_addr_ready),
             stall_depth_fifo.eq(interpolator.out_valid & ~fifo.r_rdy),
         ]
         m.d.comb += [
