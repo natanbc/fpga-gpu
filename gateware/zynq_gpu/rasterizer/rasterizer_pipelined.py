@@ -312,7 +312,7 @@ class ZReader(Component):
             c1c2_valid.eq(c1c2_fifo.r_rdy),
         ]
 
-        m.submodules.load_queue = load_queue = SyncFIFOBuffered(width=3, depth=32)
+        m.submodules.load_queue = load_queue = SyncFIFOBuffered(width=3, depth=64)
 
         with m.If(~stall_c2):
             m.d.comb += [
@@ -498,12 +498,12 @@ class Rasterizer(Component):
             interpolator.in_ws[2].eq(walker.points.payload.w2),
         ]
 
-        m.submodules.fifo = fifo = SyncFIFOBuffered(width=23 + 3 * 8 + 16, depth=32)
+        m.submodules.fifo = fifo = SyncFIFOBuffered(width=23 + 3 * 8 + 16, depth=64)
         m.d.comb += fifo_empty.eq(~fifo.r_rdy)
 
         m.d.sync += [
-            self.perf_counters.depth_fifo_buckets[fifo.level[2:]].eq(
-                self.perf_counters.depth_fifo_buckets[fifo.level[2:]] + 1
+            self.perf_counters.depth_fifo_buckets[fifo.level[3:]].eq(
+                self.perf_counters.depth_fifo_buckets[fifo.level[3:]] + 1
             ),
         ]
 
