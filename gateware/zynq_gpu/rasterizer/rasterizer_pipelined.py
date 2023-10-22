@@ -419,6 +419,7 @@ class Rasterizer(Component):
     fb_base: In(32)
 
     perf_counters: Out(StructLayout({
+        "busy_cycles": 32,
         "stalls": StructLayout({
             "walker": 32,
             "depth_load_addr": 32,
@@ -453,6 +454,9 @@ class Rasterizer(Component):
             m.d.sync += self.perf_counters.stalls.depth_store_data.eq(self.perf_counters.stalls.depth_store_data + 1)
         with m.If(stall_pixel_store):
             m.d.sync += self.perf_counters.stalls.pixel_store.eq(self.perf_counters.stalls.pixel_store + 1)
+
+        with m.If(~self.idle):
+            m.d.sync += self.perf_counters.busy_cycles.eq(self.perf_counters.busy_cycles + 1)
 
         m.submodules.walker = walker = EdgeWalker()
         m.submodules.interpolator = interpolator = RasterizerInterpolator()
