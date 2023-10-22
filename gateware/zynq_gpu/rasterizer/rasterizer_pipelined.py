@@ -259,8 +259,6 @@ class ZReader(Component):
             self.read_address.cache.eq(0b1111),
         ]
 
-        m.submodules.same_addr_fifo = fifo = SyncFIFOBuffered(width=3, depth=32)
-
         stall_c0 = Signal()
         stall_c1 = Signal()
         stall_c2 = Signal()
@@ -314,39 +312,41 @@ class ZReader(Component):
             c1c2_valid.eq(c1c2_fifo.r_rdy),
         ]
 
+        m.submodules.load_queue = load_queue = SyncFIFOBuffered(width=3, depth=32)
+
         with m.If(~stall_c2):
             m.d.comb += [
                 self.read_address.valid.eq(c1c2_valid & ~c1c2_same_addr),
                 self.read_address.addr.eq(c1c2_addr),
-                fifo.w_en.eq(c1c2_valid),
-                fifo.w_data.eq(Cat(c1c2_same_addr, c1c2_offset)),
+                load_queue.w_en.eq(c1c2_valid),
+                load_queue.w_data.eq(Cat(c1c2_same_addr, c1c2_offset)),
             ]
 
         m.d.comb += [
             self.in_addr_ready.eq(~stall_c0),
             stall_c0.eq(c0_valid & stall_c1),
             stall_c1.eq(c1_valid & ~c1c2_fifo.w_rdy),
-            stall_c2.eq(~fifo.w_rdy | ~self.read_address.ready),
+            stall_c2.eq(~load_queue.w_rdy | ~self.read_address.ready),
         ]
 
         # ================================
 
         last_word = Signal(64)
 
-        r_same_addr = Signal()
-        r_offset = Signal(2)
+        load_same_addr = Signal()
+        load_offset = Signal(2)
         m.d.comb += [
-            Cat(r_same_addr, r_offset).eq(fifo.r_data),
+            Cat(load_same_addr, load_offset).eq(load_queue.r_data),
 
-            self.read.ready.eq((fifo.r_rdy & ~r_same_addr) & self.out_z_ready),
-            fifo.r_en.eq(self.out_z_ready & self.out_z_valid),
+            self.read.ready.eq((load_queue.r_rdy & ~load_same_addr) & self.out_z_ready),
+            load_queue.r_en.eq(self.out_z_ready & self.out_z_valid),
 
             self.out_z.eq(Mux(
-                r_same_addr,
-                last_word.word_select(r_offset, 16),
-                self.read.data.word_select(r_offset, 16),
+                load_same_addr,
+                last_word.word_select(load_offset, 16),
+                self.read.data.word_select(load_offset, 16),
             )),
-            self.out_z_valid.eq(self.read.valid | (fifo.r_rdy & r_same_addr)),
+            self.out_z_valid.eq(self.read.valid | (load_queue.r_rdy & load_same_addr)),
         ]
         with m.If(self.read.ready & self.read.valid):
             m.d.sync += last_word.eq(self.read.data)
