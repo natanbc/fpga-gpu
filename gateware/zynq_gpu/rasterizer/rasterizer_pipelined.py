@@ -3,6 +3,7 @@ from amaranth.lib import wiring
 from amaranth.lib.data import StructLayout, ArrayLayout
 from amaranth.lib.fifo import SyncFIFOBuffered
 from amaranth.lib.wiring import Component, In, Out, Signature
+from amaranth.utils import log2_int
 from .edge_walker import *
 from .pixel_writer import *
 from ..zynq_ifaces import SAxiHP
@@ -26,6 +27,22 @@ RasterizerData = Signature({
         "v1": PointData,
         "v2": PointData,
     })),
+})
+
+
+# Each signal is a strobe to increment, depth_fifo_bucket is the index of which bucket to increment
+PerfCounters = StructLayout({
+    "busy": 1,
+    "stalls": StructLayout({
+        "walker_searching": 1,
+        "walker": 1,
+        "depth_load_addr": 1,
+        "depth_fifo": 1,
+        "depth_store_addr": 1,
+        "depth_store_data": 1,
+        "pixel_store": 1,
+    }),
+    "depth_fifo_bucket": log2_int(9, need_pow2=False),
 })
 
 
@@ -418,51 +435,19 @@ class Rasterizer(Component):
     z_base: In(32)
     fb_base: In(32)
 
-    perf_counters: Out(StructLayout({
-        "busy_cycles": 32,
-        "stalls": StructLayout({
-            "walker": 32,
-            "depth_load_addr": 32,
-            "depth_fifo": 32,
-            "depth_store_addr": 32,
-            "depth_store_data": 32,
-            "pixel_store": 32,
-        }),
-        "depth_fifo_buckets": ArrayLayout(32, 8),
-    }))
+    perf_counters: Out(PerfCounters)
 
     data: In(RasterizerData)
 
     def elaborate(self, platform):
         m = Module()
 
-        stall_walker = Signal()
-        stall_depth_load_addr = Signal()
-        stall_depth_fifo = Signal()
-        stall_depth_store_addr = Signal()
-        stall_depth_store_data = Signal()
-        stall_pixel_store = Signal()
-        with m.If(stall_walker):
-            m.d.sync += self.perf_counters.stalls.walker.eq(self.perf_counters.stalls.walker + 1)
-        with m.If(stall_depth_load_addr):
-            m.d.sync += self.perf_counters.stalls.depth_load_addr.eq(self.perf_counters.stalls.depth_load_addr + 1)
-        with m.If(stall_depth_fifo):
-            m.d.sync += self.perf_counters.stalls.depth_fifo.eq(self.perf_counters.stalls.depth_fifo + 1)
-        with m.If(stall_depth_store_addr):
-            m.d.sync += self.perf_counters.stalls.depth_store_addr.eq(self.perf_counters.stalls.depth_store_addr + 1)
-        with m.If(stall_depth_store_data):
-            m.d.sync += self.perf_counters.stalls.depth_store_data.eq(self.perf_counters.stalls.depth_store_data + 1)
-        with m.If(stall_pixel_store):
-            m.d.sync += self.perf_counters.stalls.pixel_store.eq(self.perf_counters.stalls.pixel_store + 1)
-
-        with m.If(~self.idle):
-            m.d.sync += self.perf_counters.busy_cycles.eq(self.perf_counters.busy_cycles + 1)
-
         m.submodules.walker = walker = EdgeWalker()
         m.submodules.interpolator = interpolator = RasterizerInterpolator()
         m.submodules.depth_tester = depth_tester = RasterizerDepthTester()
         m.submodules.writer = writer = RasterizerWriter()
 
+        m.d.sync += self.perf_counters.busy.eq(~self.idle)
         m.d.comb += self.axi2.aclk.eq(ClockSignal())
 
         fifo_empty = Signal(reset=1)
@@ -491,7 +476,10 @@ class Rasterizer(Component):
                 for sig in "rgbz":
                     m.d.sync += getattr(interpolator, sig)[vertex_idx].eq(getattr(input_vertex, sig))
 
-        m.d.sync += stall_walker.eq(walker.points.valid & ~walker.points.ready)
+        m.d.sync += [
+            self.perf_counters.stalls.walker_searching.eq(~walker.idle & ~walker.points.valid & walker.points.ready),
+            self.perf_counters.stalls.walker.eq(walker.points.valid & ~walker.points.ready),
+        ]
         m.d.comb += [
             walker.points.ready.eq(interpolator.in_ready),
             interpolator.in_valid.eq(walker.points.valid),
@@ -505,10 +493,10 @@ class Rasterizer(Component):
         m.submodules.fifo = fifo = SyncFIFOBuffered(width=23 + 3 * 8 + 16, depth=64)
         m.d.comb += fifo_empty.eq(~fifo.r_rdy)
 
+        assert self.perf_counters.depth_fifo_bucket.shape() == fifo.level[3:].shape(), \
+            f"{self.perf_counters.depth_fifo_bucket.shape()} / {fifo.level[3:].shape()}"
         m.d.sync += [
-            self.perf_counters.depth_fifo_buckets[fifo.level[3:]].eq(
-                self.perf_counters.depth_fifo_buckets[fifo.level[3:]] + 1
-            ),
+            self.perf_counters.depth_fifo_bucket.eq(fifo.level[3:]),
         ]
 
         accept_interp = Signal()
@@ -518,8 +506,8 @@ class Rasterizer(Component):
         wiring.connect(m, wiring.flipped(self.axi2.read), z_reader.read)
 
         m.d.sync += [
-            stall_depth_load_addr.eq(interpolator.out_valid & ~z_reader.in_addr_ready),
-            stall_depth_fifo.eq(interpolator.out_valid & ~fifo.r_rdy),
+            self.perf_counters.stalls.depth_load_addr.eq(interpolator.out_valid & ~z_reader.in_addr_ready),
+            self.perf_counters.stalls.depth_fifo.eq(interpolator.out_valid & ~fifo.r_rdy),
         ]
         m.d.comb += [
             accept_interp.eq(fifo.w_rdy & z_reader.in_addr_ready),
@@ -558,9 +546,9 @@ class Rasterizer(Component):
         accept_pix = Signal()
 
         m.d.sync += [
-            stall_depth_store_addr.eq(depth_tester.out_valid & ~self.axi2.write_address.ready),
-            stall_depth_store_data.eq(depth_tester.out_valid & ~self.axi2.write_data.ready),
-            stall_pixel_store.eq(depth_tester.out_valid & ~writer.ready),
+            self.perf_counters.stalls.depth_store_addr.eq(depth_tester.out_valid & ~self.axi2.write_address.ready),
+            self.perf_counters.stalls.depth_store_data.eq(depth_tester.out_valid & ~self.axi2.write_data.ready),
+            self.perf_counters.stalls.pixel_store.eq(depth_tester.out_valid & ~writer.ready),
         ]
         m.d.comb += [
             self.axi2.write_address.addr.eq(Cat(C(0, 3), (self.z_base + depth_tester.out_p_offset*2)[3:])),
