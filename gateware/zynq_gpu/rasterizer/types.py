@@ -4,10 +4,10 @@ from amaranth.lib.wiring import In, Out, Signature
 from amaranth.utils import log2_int
 
 
-__all__ = ["PointData", "RasterizerData", "PerfCounters"]
+__all__ = ["Vertex", "TriangleStream", "PerfCounters"]
 
 
-PointData = StructLayout({
+Vertex = StructLayout({
     "x": unsigned(11),
     "y": unsigned(11),
     "z": unsigned(16),
@@ -17,13 +17,13 @@ PointData = StructLayout({
 })
 
 
-RasterizerData = Signature({
+TriangleStream = Signature({
     "valid": Out(1),
     "ready": In(1),
     "points": Out(StructLayout({
-        "v0": PointData,
-        "v1": PointData,
-        "v2": PointData,
+        "v0": Vertex,
+        "v1": Vertex,
+        "v2": Vertex,
     })),
 })
 
@@ -42,4 +42,3 @@ PerfCounters = StructLayout({
     }),
     "depth_fifo_bucket": log2_int(9, need_pow2=False),
 })
-

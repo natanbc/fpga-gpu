@@ -403,7 +403,7 @@ class Rasterizer(Component):
 
     perf_counters: Out(PerfCounters)
 
-    data: In(RasterizerData)
+    data: In(TriangleStream)
 
     def elaborate(self, platform):
         m = Module()

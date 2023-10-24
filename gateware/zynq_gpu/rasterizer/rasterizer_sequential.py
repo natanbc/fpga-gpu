@@ -21,7 +21,7 @@ class Rasterizer(Component):
     # Unused, but keeps signature compatible with pipelined
     perf_counters: Out(PerfCounters)
 
-    data: In(RasterizerData)
+    data: In(TriangleStream)
 
     def elaborate(self, platform):
         m = Module()
