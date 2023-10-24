@@ -4,7 +4,7 @@ from amaranth.lib.wiring import In, Out, Signature
 from amaranth.utils import log2_int
 
 
-__all__ = ["Vertex", "TriangleStream", "PerfCounters"]
+__all__ = ["Vertex", "TriangleStream", "BufferClearStream", "PerfCounters"]
 
 
 Vertex = StructLayout({
@@ -20,7 +20,7 @@ Vertex = StructLayout({
 TriangleStream = Signature({
     "valid": Out(1),
     "ready": In(1),
-    "points": Out(StructLayout({
+    "payload": Out(StructLayout({
         "v0": Vertex,
         "v1": Vertex,
         "v2": Vertex,

@@ -403,7 +403,7 @@ class Rasterizer(Component):
 
     perf_counters: Out(PerfCounters)
 
-    data: In(TriangleStream)
+    triangles: In(TriangleStream)
 
     def elaborate(self, platform):
         m = Module()
@@ -428,17 +428,17 @@ class Rasterizer(Component):
 
         for vertex_idx in range(3):
             walker_vertex = getattr(walker.triangle.payload, f"v{vertex_idx}")
-            input_vertex = getattr(self.data.points, f"v{vertex_idx}")
+            input_vertex = getattr(self.triangles.payload, f"v{vertex_idx}")
             for sig in ["x", "y"]:
                 m.d.comb += getattr(walker_vertex, sig).eq(getattr(input_vertex, sig))
 
         m.d.comb += [
-            self.data.ready.eq(walker.triangle.ready),
-            walker.triangle.valid.eq(self.data.valid),
+            self.triangles.ready.eq(walker.triangle.ready),
+            walker.triangle.valid.eq(self.triangles.valid),
         ]
-        with m.If(self.data.ready & self.data.valid):
+        with m.If(self.triangles.ready & self.triangles.valid):
             for vertex_idx in range(3):
-                input_vertex = getattr(self.data.points, f"v{vertex_idx}")
+                input_vertex = getattr(self.triangles.payload, f"v{vertex_idx}")
                 for sig in "rgbz":
                     m.d.sync += getattr(interpolator, sig)[vertex_idx].eq(getattr(input_vertex, sig))
 

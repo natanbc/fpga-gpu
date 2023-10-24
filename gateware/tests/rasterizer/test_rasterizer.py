@@ -81,12 +81,12 @@ class RasterizerTest(unittest.TestCase):
                     expected_mem[off*3:(off + 1)*3] = bytes([v.b, v.g, v.r])
 
             for v in ["v0", "v1", "v2"]:
-                d = getattr(dut.data.points, v)
+                d = getattr(dut.triangles.payload, v)
                 for n in "xyzrgb":
                     yield getattr(d, n).eq(getattr(getattr(t, v), n))
-            yield dut.data.valid.eq(1)
-            yield from wait_until(dut.data.ready, 100_000)
-            yield dut.data.valid.eq(0)
+            yield dut.triangles.valid.eq(1)
+            yield from wait_until(dut.triangles.ready, 100_000)
+            yield dut.triangles.valid.eq(0)
 
         def submit_trigs():
             yield dut.width.eq(width)
