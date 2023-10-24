@@ -1,31 +1,13 @@
 from amaranth import *
 from amaranth.lib import wiring
-from amaranth.lib.data import StructLayout
-from amaranth.lib.wiring import Component, In, Out, Signature
+from amaranth.lib.wiring import Component, In, Out
 from .edge_walker import *
 from .pixel_writer import *
+from .types import *
 from ..zynq_ifaces import SAxiHP
 
 
-PointData = StructLayout({
-    "x": unsigned(11),
-    "y": unsigned(11),
-    "z": unsigned(16),
-    "r": unsigned(8),
-    "g": unsigned(8),
-    "b": unsigned(8),
-})
-
-
-RasterizerData = Signature({
-    "valid": Out(1),
-    "ready": In(1),
-    "points": Out(StructLayout({
-        "v0": PointData,
-        "v1": PointData,
-        "v2": PointData,
-    })),
-})
+__all__ = ["Rasterizer"]
 
 
 class Rasterizer(Component):
@@ -35,6 +17,9 @@ class Rasterizer(Component):
     width: In(12)
     z_base: In(32)
     fb_base: In(32)
+
+    # Unused, but keeps signature compatible with pipelined
+    perf_counters: Out(PerfCounters)
 
     data: In(RasterizerData)
 
