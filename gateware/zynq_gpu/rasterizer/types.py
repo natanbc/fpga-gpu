@@ -28,6 +28,19 @@ TriangleStream = Signature({
 })
 
 
+BufferClearStream = Signature({
+    "ready": In(1),
+    "valid": Out(1),
+
+    "payload": Out(StructLayout({
+        "base_addr": 25,   # 128-byte aligned base address. The 7 LSBs are filled with zeroes.
+        "words": 20,       # How many words of data should be written.
+        "pattern": 24,     # Works for both depth and frame buffers
+        "qos": 4,          # AXI QOS field.
+    }))
+})
+
+
 # Each signal is a strobe to increment, depth_fifo_bucket is the index of which bucket to increment
 PerfCounters = StructLayout({
     "busy": 1,
