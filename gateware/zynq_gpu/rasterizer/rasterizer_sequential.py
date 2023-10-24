@@ -143,7 +143,7 @@ class Rasterizer(Component):
         with m.FSM():
             with m.State("IDLE"):
                 m.d.comb += [
-                    self.idle.eq(1),
+                    self.idle.eq(~self.triangles.valid),
                     self.triangles.ready.eq(walker.triangle.ready),
                     walker.triangle.valid.eq(self.triangles.valid),
                 ]

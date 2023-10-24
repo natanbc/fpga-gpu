@@ -68,7 +68,6 @@ class RasterizerTest(unittest.TestCase):
             ar_buffer=8,
             aw_buffer=4,
             w_buffer=4,
-            read_latency=4,
         )
 
         def submit_trig(t: Triangle):
@@ -113,6 +112,20 @@ class RasterizerTest(unittest.TestCase):
                 for _ in range(3):
                     yield
 
+        idles = 0
+
+        def count_idles():
+            nonlocal idles
+
+            yield Passive()
+            idle_last = 0
+            while True:
+                yield
+                idle = (yield dut.idle)
+                if idle_last == 0 and idle != 0:
+                    idles += 1
+                idle_last = idle
+
         cycles = 0
 
         def count_cycles():
@@ -130,8 +143,11 @@ class RasterizerTest(unittest.TestCase):
         emulator_z_buffer.add_to_sim(sim)
         sim.add_sync_process(submit_trigs)
         sim.add_sync_process(count_cycles)
+        sim.add_sync_process(count_idles)
         sim.add_clock(1/1e6)
         sim.run()
+
+        assert idles == 1
 
         if expected_mem != mem:
             for idx in range(len(expected_mem)):

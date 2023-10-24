@@ -297,7 +297,7 @@ class EdgeWalker(Component):
 
         with m.FSM():
             with m.State("IDLE"):
-                m.d.comb += self.idle.eq(1)
+                m.d.comb += self.idle.eq(~self.triangle.valid)
                 with m.If(self.triangle.valid):  # area cycle 0, w0/w1/w2 not started
                     m.d.sync += [
                         a01.eq(_a01),
