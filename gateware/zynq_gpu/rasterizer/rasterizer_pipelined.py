@@ -416,15 +416,23 @@ class Rasterizer(Component):
         m.d.sync += self.perf_counters.busy.eq(~self.idle)
         m.d.comb += self.axi2.aclk.eq(ClockSignal())
 
+        idle_ctr = Signal(3)
+
         fifo_empty = Signal(reset=1)
         m.d.comb += [
             interpolator.width.eq(self.width),
             writer.fb_base.eq(self.fb_base),
             writer.width.eq(self.width),
 
-            self.idle.eq(walker.idle & interpolator.idle & fifo_empty & depth_tester.idle & writer.idle),
+            self.idle.eq(idle_ctr.all()),
         ]
         wiring.connect(m, wiring.flipped(self.axi), writer.axi)
+
+        with m.If(walker.idle & interpolator.idle & fifo_empty & depth_tester.idle & writer.idle):
+            with m.If(~idle_ctr.all()):
+                m.d.sync += idle_ctr.eq(idle_ctr + 1)
+        with m.Else():
+            m.d.sync += idle_ctr.eq(0)
 
         for vertex_idx in range(3):
             walker_vertex = getattr(walker.triangle.payload, f"v{vertex_idx}")
