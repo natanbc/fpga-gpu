@@ -4,7 +4,7 @@ from amaranth.lib.wiring import In, Out, Signature
 from amaranth.utils import log2_int
 
 
-__all__ = ["Vertex", "TriangleStream", "BufferClearStream", "PerfCounters"]
+__all__ = ["Vertex", "TriangleStream", "TextureBufferRead", "TextureBufferWrite", "BufferClearStream", "PerfCounters"]
 
 
 Vertex = StructLayout({
@@ -24,7 +24,27 @@ TriangleStream = Signature({
         "v0": Vertex,
         "v1": Vertex,
         "v2": Vertex,
+        "texture_buffer": 2,
+        "texture_enable": 1,
     })),
+})
+
+
+TextureBufferRead = Signature({
+    "en": Out(1),
+    "buffer": Out(2),
+    "s": Out(7),
+    "t": Out(7),
+    # Available on the next cycle after s/t/buffer are set
+    "color": In(24),
+})
+
+
+TextureBufferWrite = Signature({
+    "en": Out(1),
+    "buffer": Out(2),
+    "addr": Out(13),
+    "data": Out(48),
 })
 
 

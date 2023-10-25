@@ -535,6 +535,10 @@ class Rasterizer(Component):
                 input_vertex = getattr(self.triangles.payload, f"v{vertex_idx}")
                 for sig in "rgbz":
                     m.d.sync += getattr(interpolator, sig)[vertex_idx].eq(getattr(input_vertex, sig))
+            m.d.sync += [
+                interpolator.texture_buffer.eq(self.triangles.payload.texture_buffer),
+                interpolator.texture_enable.eq(self.triangles.payload.texture_enable),
+            ]
 
         m.d.sync += [
             self.perf_counters.stalls.walker_searching.eq(~walker.idle & ~walker.points.valid & walker.points.ready),
