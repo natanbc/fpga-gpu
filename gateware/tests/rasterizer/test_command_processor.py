@@ -12,6 +12,20 @@ def pack_vertex(v: Vertex):
     return v.x | (v.y << 11) | (v.z << 22) | (v.r << 38) | (v.g << 46) | (v.b << 54)
 
 
+def check_triangle(dut, i, triangle):
+    texture_enable = (yield dut.triangles.payload.texture_enable)
+    texture_buffer = (yield dut.triangles.payload.texture_buffer)
+    assert texture_enable == int(triangle[3])
+    assert texture_buffer == triangle[4]
+    for sig, v in [("v0", triangle[0]), ("v1", triangle[1]), ("v2", triangle[2])]:
+        p_v = getattr(dut.triangles.payload, sig)
+        for attr in "xyzrgb":
+            expected = getattr(v, attr)
+            actual = (yield getattr(p_v, attr))
+            assert expected == actual, (f"Mismatch at {i}.{sig}.{attr} ({triangle}): "
+                                        f"expected {expected}, got {actual}")
+
+
 class CommandProcessorTest(unittest.TestCase):
     def test_triangles(self):
         dut = CommandProcessor()
@@ -88,17 +102,7 @@ class CommandProcessorTest(unittest.TestCase):
             yield dut.triangles.ready.eq(1)
             for i, t in enumerate(triangles):
                 yield from wait_until(dut.triangles.valid)
-                texture_enable = (yield dut.triangles.payload.texture_enable)
-                texture_buffer = (yield dut.triangles.payload.texture_buffer)
-                assert texture_enable == int(t[3])
-                assert texture_buffer == t[4]
-                for sig, v in [("v0", t[0]), ("v1", t[1]), ("v2", t[2])]:
-                    p_v = getattr(dut.triangles.payload, sig)
-                    for attr in "xyzrgb":
-                        expected = getattr(v, attr)
-                        actual = (yield getattr(p_v, attr))
-                        assert expected == actual, (f"Mismatch at {i}.{sig}.{attr} ({t}): "
-                                                    f"expected {expected}, got {actual}")
+                yield from check_triangle(dut, i, t)
                 yield
 
         sim = Simulator(dut)
@@ -117,10 +121,20 @@ class CommandProcessorTest(unittest.TestCase):
         textures = [
             bytes([0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC] * (128 * 128 // 4)),
         ]
+        triangle = (
+            Vertex(0x1, 0x2, 0x3, 0x4, 0x5, 0x6),
+            Vertex(0x7, 0x8, 0x9, 0xA, 0xB, 0xC),
+            Vertex(0xD, 0xE, 0xF, 0x0, 0x1, 0x2),
+            False,
+            0b00,
+        )
 
         for buffer, tex in enumerate(textures):
             command_mem += struct.pack("<I", Command.READ_TEXTURE.value | (buffer << 8))
             command_mem += tex
+        command_mem += struct.pack("<I", Command.DRAW_TRIANGLE.value | (int(triangle[3]) << 8) | (triangle[4] << 9))
+        command_mem += struct.pack("<3Q", *[pack_vertex(v) for v in triangle[:3]])
+
         assert len(command_mem) % 4 == 0
 
         def read(addr, _):
@@ -154,8 +168,10 @@ class CommandProcessorTest(unittest.TestCase):
                     assert act_buffer == i, f"{act_buffer} / {i}"
                     assert act_addr == addr, f"{hex(act_addr)} / {hex(addr)}"
                     assert act_data == data, f"{hex(addr)}: {hex(act_data)} / {hex(data)}"
-
                     yield
+            yield from wait_until(dut.triangles.valid)
+            yield from check_triangle(dut, 0, triangle)
+            yield
 
         sim = Simulator(dut)
         emulator.add_to_sim(sim)
