@@ -125,10 +125,10 @@ class RasterizerInterpolator(Component):
                 c2_valid.eq(c1_valid),
             ]
 
-        c3_r = Signal(8, reset_less=True)
-        c3_g = Signal(8, reset_less=True)
-        c3_b = Signal(8, reset_less=True)
-        c3_z = Signal(16, reset_less=True)
+        c3_r = Signal(9, reset_less=True)
+        c3_g = Signal(9, reset_less=True)
+        c3_b = Signal(9, reset_less=True)
+        c3_z = Signal(17, reset_less=True)
         c3_p_offset = Signal(23, reset_less=True)
         c3_texture_buffer = Signal.like(self.texture_buffer)
         c3_texture_enable = Signal.like(self.texture_enable)
@@ -139,9 +139,7 @@ class RasterizerInterpolator(Component):
                     [c2_r_scaled, c2_g_scaled, c2_b_scaled, c2_z_scaled],
                     [c3_r,        c3_g,        c3_b,        c3_z],
             ):
-                m.d.sync += out.eq(
-                    (sum(in_) + (1 << 23)) >> 24
-                )
+                m.d.sync += out.eq(sum(in_) >> 23)
             m.d.sync += [
                 c3_p_offset.eq(c2_p_offset),
                 c3_texture_buffer.eq(c2_texture_buffer),
@@ -158,10 +156,10 @@ class RasterizerInterpolator(Component):
 
             self.out_valid.eq(c3_valid),
             self.out_p_offset.eq(c3_p_offset),
-            self.out_r.eq(c3_r),
-            self.out_g.eq(c3_g),
-            self.out_b.eq(c3_b),
-            self.out_z.eq(c3_z),
+            self.out_r.eq((c3_r + 1) >> 1),
+            self.out_g.eq((c3_g + 1) >> 1),
+            self.out_b.eq((c3_b + 1) >> 1),
+            self.out_z.eq((c3_z + 1) >> 1),
             self.out_texture_buffer.eq(c3_texture_buffer),
             self.out_texture_enable.eq(c3_texture_enable),
         ]
