@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import random
 import struct
 
@@ -8,8 +9,48 @@ from .utils import Vertex
 from ..utils import wait_until, AxiEmulator, make_testbench_process
 
 
+@dataclass
+class ReadTexture:
+    buffer: int
+    s_start: int
+    s_end: int
+    t_half_start: int
+    t_half_end: int
+    data: bytes
+
+
 def pack_vertex(v: Vertex):
     return v.x | (v.y << 11) | (v.z << 22) | (v.r << 38) | (v.g << 46) | (v.b << 54)
+
+
+def pack_read_texture(r: ReadTexture):
+    assert 0 <= r.buffer < 4, f"{r.buffer}"
+    assert 0 <= r.s_start < 128, f"{r.s_start}"
+    assert 0 <= r.s_end < 128, f"{r.s_end}"
+    assert 0 <= r.t_half_start < 64, f"{r.t_half_start}"
+    assert 0 <= r.t_half_end < 64, f"{r.t_half_end}"
+
+    assert r.s_start < r.s_end, f"{r.s_start} / {r.s_end}"
+    assert r.t_half_start < r.t_half_end, f"{r.t_half_start} / {r.t_half_end}"
+
+    expected_len = (r.s_end - r.s_start + 1) * ((r.t_half_end - r.t_half_start + 1) * 2) * 3
+    assert len(r.data) == expected_len, f"{len(r.data)} / {expected_len}"
+    s_high = r.s_start >> 6
+    assert s_high == (r.s_end >> 6), f"{r.s_start} / {r.s_end}"
+    t_high = r.t_half_start >> 5
+    assert t_high == (r.t_half_end >> 5), f"{r.t_half_start} / {r.t_half_end}"
+
+    cmd = (
+            Command.READ_TEXTURE.value |
+            (r.buffer << 6) |
+            (s_high << 8) |
+            ((r.s_start & 0b111_111) << 9) |
+            ((r.s_end & 0b111_111) << 15) |
+            (t_high << 21) |
+            ((r.t_half_start & 0b11_111) << 22) |
+            ((r.t_half_end & 0b11_111) << 27)
+    )
+    return struct.pack("<I", cmd)
 
 
 def check_triangle(dut, i, triangle):
@@ -77,7 +118,7 @@ class CommandProcessorTest(unittest.TestCase):
         command_mem = bytes()
         for triangle in triangles:
             command_mem += bytes([
-                *struct.pack("<I", Command.DRAW_TRIANGLE.value | (int(triangle[3]) << 8) | (triangle[4] << 9)),
+                *struct.pack("<I", Command.DRAW_TRIANGLE.value | (int(triangle[3]) << 6) | (triangle[4] << 7)),
                 *struct.pack("<3Q", *[pack_vertex(v) for v in triangle[:3]]),
             ])
 
@@ -118,8 +159,18 @@ class CommandProcessorTest(unittest.TestCase):
         base_addr = 0x4000_0000
         command_mem = bytes()
 
+        # Too slow for normal simulations
+        # t_128 = bytes([0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC] * (128 * 128 // 4))
+        # t_128_quarter = len(t_128) // 4
+        # assert t_128_quarter % 6 == 0
+
+        t_16 = bytes([0xAA, 0xBB, 0xCC] * 16 * 16)
         textures = [
-            bytes([0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC] * (128 * 128 // 4)),
+            ReadTexture(1, 29, 29+16-1, 5, 5+(16//2)-1, t_16),
+            # ReadTexture(0, 0, 63, 0, 31, t_128[0:t_128_quarter]),
+            # ReadTexture(0, 0, 63, 32, 63, t_128[t_128_quarter:2*t_128_quarter]),
+            # ReadTexture(0, 64, 127, 0, 31, t_128[2*t_128_quarter:3*t_128_quarter]),
+            # ReadTexture(0, 64, 127, 32, 63, t_128[3*t_128_quarter:4*t_128_quarter]),
         ]
         triangle = (
             Vertex(0x1, 0x2, 0x3, 0x4, 0x5, 0x6),
@@ -129,9 +180,9 @@ class CommandProcessorTest(unittest.TestCase):
             0b00,
         )
 
-        for buffer, tex in enumerate(textures):
-            command_mem += struct.pack("<I", Command.READ_TEXTURE.value | (buffer << 8))
-            command_mem += tex
+        for tex in textures:
+            command_mem += pack_read_texture(tex)
+            command_mem += tex.data
         command_mem += struct.pack("<I", Command.DRAW_TRIANGLE.value | (int(triangle[3]) << 8) | (triangle[4] << 9))
         command_mem += struct.pack("<3Q", *[pack_vertex(v) for v in triangle[:3]])
 
@@ -155,9 +206,14 @@ class CommandProcessorTest(unittest.TestCase):
             yield from wait_until(dut.control.idle, len(textures) * (128 * 128 // 2 * 3) + 30)
 
         def check():
-            yield dut.triangles.ready.eq(1)
-            for i, t in enumerate(textures):
-                for addr, pixel_bytes in enumerate(zip(*([iter(t)] * 6), strict=True)):
+            for texture in textures:
+                base = texture.s_start * 64 + texture.t_half_start
+                width = texture.t_half_end - texture.t_half_start + 1
+
+                def idx_to_addr(i):
+                    return base + 64 * (i // width) + (i % width)
+
+                for offset, pixel_bytes in enumerate(zip(*([iter(texture.data)] * 6), strict=True)):
                     pixel1 = (pixel_bytes[0] << 0) | (pixel_bytes[1] << 8) | (pixel_bytes[2] << 16)
                     pixel2 = (pixel_bytes[3] << 0) | (pixel_bytes[4] << 8) | (pixel_bytes[5] << 16)
                     data = pixel1 | (pixel2 << 24)
@@ -165,10 +221,12 @@ class CommandProcessorTest(unittest.TestCase):
                     act_buffer = (yield dut.texture_writes.buffer)
                     act_addr = (yield dut.texture_writes.addr)
                     act_data = (yield dut.texture_writes.data)
-                    assert act_buffer == i, f"{act_buffer} / {i}"
+                    addr = idx_to_addr(offset)
+                    assert act_buffer == texture.buffer, f"{act_buffer} / {texture.buffer}"
                     assert act_addr == addr, f"{hex(act_addr)} / {hex(addr)}"
                     assert act_data == data, f"{hex(addr)}: {hex(act_data)} / {hex(data)}"
                     yield
+            yield dut.triangles.ready.eq(1)
             yield from wait_until(dut.triangles.valid)
             yield from check_triangle(dut, 0, triangle)
             yield

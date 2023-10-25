@@ -45,7 +45,21 @@ class CommandProcessor(Component):
                 vertex_ctr.eq(Mux(vertex_half, Mux(vertex_ctr == 2, 0, vertex_ctr + 1), vertex_ctr)),
             ]
 
-        texture_addr_next = Signal.like(self.texture_writes.addr)
+        texture_s = Signal(7)
+        # Half of the t coordinate, 2 pixels are written at once
+        texture_t_half = Signal(6)
+
+        texture_s_end = Signal(7, reset=0x7F)
+        texture_t_start = Signal(6, reset=0)
+        texture_t_end = Signal(6, reset=0x3F)
+
+        advance_texture = Signal()
+        with m.If(advance_texture):
+            m.d.sync += [
+                texture_t_half.eq(Mux(texture_t_half == texture_t_end, texture_t_start, texture_t_half + 1)),
+                texture_s.eq(texture_s + (texture_t_half == texture_t_end)),
+            ]
+
         texture_en = Signal()
         texture_fsm_state = Signal(range(3))
         texture_remain = Signal(16)
@@ -59,20 +73,20 @@ class CommandProcessor(Component):
             with m.Case(1):
                 m.d.sync += Cat(self.texture_writes.data[32:], texture_remain).eq(dma.data_stream.data)
                 with m.If(dma.data_stream.ready & dma.data_stream.valid):
+                    m.d.comb += advance_texture.eq(1)
                     m.d.sync += [
                         self.texture_writes.en.eq(texture_en),
                         texture_fsm_state.eq(2),
-                        self.texture_writes.addr.eq(texture_addr_next),
-                        texture_addr_next.eq(texture_addr_next + 1),
+                        self.texture_writes.addr.eq(Cat(texture_t_half, texture_s)),
                     ]
             with m.Case(2):
                 m.d.sync += self.texture_writes.data.eq(Cat(texture_remain, dma.data_stream.data))
                 with m.If(dma.data_stream.ready & dma.data_stream.valid):
+                    m.d.comb += advance_texture.eq(1)
                     m.d.sync += [
                         self.texture_writes.en.eq(texture_en),
                         texture_fsm_state.eq(0),
-                        self.texture_writes.addr.eq(texture_addr_next),
-                        texture_addr_next.eq(texture_addr_next + 1),
+                        self.texture_writes.addr.eq(Cat(texture_t_half, texture_s)),
                     ]
 
         with m.FSM():
@@ -82,16 +96,38 @@ class CommandProcessor(Component):
                     dma.data_stream.ready.eq(1),
                 ]
                 with m.If(dma.data_stream.valid):
-                    with m.Switch(dma.data_stream.data[:8]):
+                    with m.Switch(dma.data_stream.data[:6]):
                         with m.Case(Command.DRAW_TRIANGLE):
                             m.d.sync += vertex_ctr.eq(0), vertex_half.eq(0)
-                            m.d.sync += self.triangles.payload.texture_enable.eq(dma.data_stream.data[8])
-                            m.d.sync += self.triangles.payload.texture_buffer.eq(dma.data_stream.data[9:11])
+                            m.d.sync += self.triangles.payload.texture_enable.eq(dma.data_stream.data[6])
+                            m.d.sync += self.triangles.payload.texture_buffer.eq(dma.data_stream.data[7:9])
                             m.next = "READ_VERTEXES"
                         with m.Case(Command.READ_TEXTURE):
+                            s_start = Signal(7)
+                            s_end = Signal(7)
+                            t_half_start = Signal(6)
+                            t_half_end = Signal(6)
+
+                            s_high = dma.data_stream.data[8]
+                            m.d.comb += [
+                                s_start.eq(Cat(dma.data_stream.data[9:15], s_high)),
+                                s_end.eq(Cat(dma.data_stream.data[15:21], s_high)),
+                            ]
+                            t_high = dma.data_stream.data[21]
+                            m.d.comb += [
+                                t_half_start.eq(Cat(dma.data_stream.data[22:27], t_high)),
+                                t_half_end.eq(Cat(dma.data_stream.data[27:32], t_high)),
+                            ]
+
                             m.d.sync += [
-                                self.texture_writes.buffer.eq(dma.data_stream.data[8:10]),
-                                texture_addr_next.eq(0),
+                                self.texture_writes.buffer.eq(dma.data_stream.data[6:8]),
+                                texture_s.eq(s_start),
+                                texture_s_end.eq(s_end),
+
+                                texture_t_start.eq(t_half_start),
+                                texture_t_half.eq(t_half_start),
+                                texture_t_end.eq(t_half_end),
+
                                 texture_fsm_state.eq(0),
                             ]
                             m.next = "READ_TEXTURE"
@@ -106,7 +142,7 @@ class CommandProcessor(Component):
             with m.State("READ_TEXTURE"):
                 m.d.comb += texture_en.eq(1), dma.data_stream.ready.eq(1)
                 with m.If(dma.data_stream.ready & dma.data_stream.valid):
-                    with m.If(texture_addr_next == (128 * 128 // 2) - 1):
+                    with m.If((texture_s == texture_s_end) & (texture_t_half == texture_t_end)):
                         m.next = "READ_CMD"
 
         return m
