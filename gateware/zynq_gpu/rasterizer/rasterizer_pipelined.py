@@ -19,6 +19,8 @@ class RasterizerInterpolator(Component):
     g: In(ArrayLayout(8, 3))
     b: In(ArrayLayout(8, 3))
     z: In(ArrayLayout(16, 3))
+    texture_buffer: In(2)
+    texture_enable: In(1)
 
     idle: Out(1)
 
@@ -34,6 +36,8 @@ class RasterizerInterpolator(Component):
     out_g: Out(8)
     out_b: Out(8)
     out_z: Out(16)
+    out_texture_buffer: Out(2)
+    out_texture_enable: Out(1)
 
     def elaborate(self, platform):
         m = Module()
@@ -48,6 +52,8 @@ class RasterizerInterpolator(Component):
         c0_z = Signal.like(self.z, reset_less=True)
         c0_p = Signal.like(self.in_p, reset_less=True)
         c0_ws = Signal.like(self.in_ws, reset_less=True)
+        c0_texture_buffer = Signal.like(self.texture_buffer)
+        c0_texture_enable = Signal.like(self.texture_enable)
         c0_valid = Signal()
 
         with m.If(~stall_input):
@@ -58,6 +64,8 @@ class RasterizerInterpolator(Component):
                 c0_g.eq(self.g),
                 c0_b.eq(self.b),
                 c0_z.eq(self.z),
+                c0_texture_buffer.eq(self.texture_buffer),
+                c0_texture_enable.eq(self.texture_enable),
                 c0_valid.eq(self.in_valid),
             ]
 
@@ -67,6 +75,8 @@ class RasterizerInterpolator(Component):
         c1_z = Signal.like(self.z, reset_less=True)
         c1_p = Signal.like(self.in_p, reset_less=True)
         c1_ws = Signal.like(self.in_ws, reset_less=True)
+        c1_texture_buffer = Signal.like(self.texture_buffer)
+        c1_texture_enable = Signal.like(self.texture_enable)
         c1_valid = Signal()
 
         with m.If(~stall_input):
@@ -77,6 +87,8 @@ class RasterizerInterpolator(Component):
                 c1_g.eq(c0_g),
                 c1_b.eq(c0_b),
                 c1_z.eq(c0_z),
+                c1_texture_buffer.eq(c0_texture_buffer),
+                c1_texture_enable.eq(c0_texture_enable),
                 c1_valid.eq(c0_valid),
             ]
 
@@ -85,6 +97,8 @@ class RasterizerInterpolator(Component):
         c2_b_scaled = Array(Signal(32, name=f"b_scaled_{i}", reset_less=True) for i in range(3))
         c2_z_scaled = Array(Signal(40, name=f"z_scaled_{i}", reset_less=True) for i in range(3))
         c2_p_offset = Signal(23, reset_less=True)
+        c2_texture_buffer = Signal.like(self.texture_buffer)
+        c2_texture_enable = Signal.like(self.texture_enable)
         c2_valid = Signal()
 
         width_s = Signal(signed(12))
@@ -99,13 +113,15 @@ class RasterizerInterpolator(Component):
 
         with m.If(~stall_input):
             for in_, out in zip(
-                [c1_r,        c1_g,        c1_b,        c1_z],
-                [c2_r_scaled, c2_g_scaled, c2_b_scaled, c2_z_scaled],
+                    [c1_r,        c1_g,        c1_b,        c1_z],
+                    [c2_r_scaled, c2_g_scaled, c2_b_scaled, c2_z_scaled],
             ):
                 for i in range(3):
                     m.d.sync += out[i].eq(in_[i] * c1_ws[i])
             m.d.sync += [
                 c2_p_offset.eq(self.width * c1_p.y + c1_p.x),
+                c2_texture_buffer.eq(c1_texture_buffer),
+                c2_texture_enable.eq(c1_texture_enable),
                 c2_valid.eq(c1_valid),
             ]
 
@@ -114,18 +130,22 @@ class RasterizerInterpolator(Component):
         c3_b = Signal(8, reset_less=True)
         c3_z = Signal(16, reset_less=True)
         c3_p_offset = Signal(23, reset_less=True)
+        c3_texture_buffer = Signal.like(self.texture_buffer)
+        c3_texture_enable = Signal.like(self.texture_enable)
         c3_valid = Signal()
 
         with m.If(~stall_c3):
             for in_, out in zip(
-                [c2_r_scaled, c2_g_scaled, c2_b_scaled, c2_z_scaled],
-                [c3_r,        c3_g,        c3_b,        c3_z],
+                    [c2_r_scaled, c2_g_scaled, c2_b_scaled, c2_z_scaled],
+                    [c3_r,        c3_g,        c3_b,        c3_z],
             ):
                 m.d.sync += out.eq(
                     (sum(in_) + (1 << 23)) >> 24
                 )
             m.d.sync += [
                 c3_p_offset.eq(c2_p_offset),
+                c3_texture_buffer.eq(c2_texture_buffer),
+                c3_texture_enable.eq(c2_texture_enable),
                 c3_valid.eq(c2_valid),
             ]
 
@@ -142,6 +162,8 @@ class RasterizerInterpolator(Component):
             self.out_g.eq(c3_g),
             self.out_b.eq(c3_b),
             self.out_z.eq(c3_z),
+            self.out_texture_buffer.eq(c3_texture_buffer),
+            self.out_texture_enable.eq(c3_texture_enable),
         ]
 
         return m
@@ -157,6 +179,8 @@ class RasterizerDepthTester(Component):
     in_g: In(8)
     in_b: In(8)
     in_z: In(16)
+    in_texture_buffer: In(2)
+    in_texture_enable: In(1)
 
     out_ready: In(1)
     out_valid: Out(1)
@@ -165,7 +189,9 @@ class RasterizerDepthTester(Component):
     out_g: Out(8)
     out_b: Out(8)
     out_z: Out(16)
-    
+    out_texture_buffer: Out(2)
+    out_texture_enable: Out(1)
+
     zst_ready: Out(1)
     zst_valid: In(1)
     zst_z: In(16)
@@ -181,6 +207,8 @@ class RasterizerDepthTester(Component):
         b = Signal(8, reset_less=True)
         z = Signal(16, reset_less=True)
         fetched_z = Signal(16, reset_less=True)
+        texture_buffer = Signal(2)
+        texture_enable = Signal()
         valid_data = Signal()
 
         with m.If(~stall):
@@ -194,6 +222,8 @@ class RasterizerDepthTester(Component):
                 b.eq(self.in_b),
                 z.eq(self.in_z),
                 fetched_z.eq(self.zst_z),
+                texture_buffer.eq(self.in_texture_buffer),
+                texture_enable.eq(self.in_texture_enable),
                 valid_data.eq(self.zst_ready & self.zst_valid),
             ]
 
@@ -215,6 +245,8 @@ class RasterizerDepthTester(Component):
             self.out_g.eq(g),
             self.out_b.eq(b),
             self.out_z.eq(z),
+            self.out_texture_buffer.eq(texture_buffer),
+            self.out_texture_enable.eq(texture_enable),
         ]
 
         return m
@@ -340,6 +372,57 @@ class ZReader(Component):
         return m
 
 
+class RasterizerTextureMapper(Component):
+    in_ready: Out(1)
+    in_valid: In(1)
+    in_p_offset: In(23)
+    in_r: In(8)
+    in_g: In(8)
+    in_b: In(8)
+    in_texture_buffer: In(2)
+    in_texture_enable: In(1)
+
+    out_ready: In(1)
+    out_valid: Out(1)
+    out_p_offset: Out(23)
+    out_r: Out(8)
+    out_g: Out(8)
+    out_b: Out(8)
+
+    def elaborate(self, platform):
+        m = Module()
+
+        stall = Signal()
+
+        p_offset = Signal(23)
+        r = Signal(8)
+        g = Signal(8)
+        b = Signal(8)
+        valid = Signal()
+
+        with m.If(~stall):
+            m.d.sync += [
+                p_offset.eq(self.in_p_offset),
+                r.eq(self.in_r),
+                g.eq(self.in_g),
+                b.eq(self.in_b),
+                valid.eq(self.in_valid),
+            ]
+
+        m.d.comb += [
+            self.in_ready.eq(~stall),
+            stall.eq(valid & ~self.out_ready),
+
+            self.out_valid.eq(valid),
+            self.out_p_offset.eq(p_offset),
+            self.out_r.eq(r),
+            self.out_g.eq(g),
+            self.out_b.eq(b),
+        ]
+
+        return m
+
+
 class RasterizerWriter(Component):
     fb_base: In(32)
     width: In(11)
@@ -417,6 +500,7 @@ class Rasterizer(Component):
         m.submodules.interpolator = interpolator = RasterizerInterpolator()
         m.submodules.z_reader = z_reader = ZReader()
         m.submodules.depth_tester = depth_tester = RasterizerDepthTester()
+        m.submodules.texture_mapper = texture_mapper = RasterizerTextureMapper()
         m.submodules.writer = writer = RasterizerWriter()
 
         m.d.sync += self.perf_counters.busy.eq(~self.idle)
@@ -468,7 +552,7 @@ class Rasterizer(Component):
             interpolator.in_ws[2].eq(walker.points.payload.w2),
         ]
 
-        m.submodules.fifo = fifo = SyncFIFOBuffered(width=23 + 3 * 8 + 16, depth=64)
+        m.submodules.fifo = fifo = SyncFIFOBuffered(width=23 + 3 * 8 + 16 + 3, depth=64)
         m.d.comb += fifo_empty.eq(~fifo.r_rdy)
 
         assert self.perf_counters.depth_fifo_bucket.shape() == fifo.level[3:].shape(), \
@@ -498,6 +582,8 @@ class Rasterizer(Component):
                 interpolator.out_r,
                 interpolator.out_z,
                 interpolator.out_p_offset,
+                interpolator.out_texture_buffer,
+                interpolator.out_texture_enable,
             ))
         ]
 
@@ -510,6 +596,8 @@ class Rasterizer(Component):
                 depth_tester.in_r,
                 depth_tester.in_z,
                 depth_tester.in_p_offset,
+                depth_tester.in_texture_buffer,
+                depth_tester.in_texture_enable,
             ).eq(fifo.r_data),
 
             depth_tester.zst_valid.eq(z_reader.out_z_valid),
@@ -537,18 +625,31 @@ class Rasterizer(Component):
 
             self.axi2.write_response.ready.eq(1),
 
-            accept_pix.eq(writer.ready & self.axi2.write_data.ready & self.axi2.write_address.ready),
+            accept_pix.eq(texture_mapper.in_ready & self.axi2.write_data.ready & self.axi2.write_address.ready),
 
-            self.axi2.write_address.valid.eq(depth_tester.out_valid & writer.ready & self.axi2.write_data.ready),
-            self.axi2.write_data.valid.eq(depth_tester.out_valid & writer.ready & self.axi2.write_address.ready),
+            self.axi2.write_address.valid.eq(depth_tester.out_valid & texture_mapper.in_ready & self.axi2.write_data.ready),
+            self.axi2.write_data.valid.eq(depth_tester.out_valid & texture_mapper.in_ready & self.axi2.write_address.ready),
 
             depth_tester.out_ready.eq(accept_pix),
-            writer.valid.eq(depth_tester.out_valid & self.axi2.write_data.ready & self.axi2.write_address.ready),
+            texture_mapper.in_valid.eq(
+                depth_tester.out_valid & self.axi2.write_data.ready & self.axi2.write_address.ready),
 
-            writer.p_offset.eq(depth_tester.out_p_offset),
-            writer.r.eq(depth_tester.out_r),
-            writer.g.eq(depth_tester.out_g),
-            writer.b.eq(depth_tester.out_b),
+            texture_mapper.in_p_offset.eq(depth_tester.out_p_offset),
+            texture_mapper.in_r.eq(depth_tester.out_r),
+            texture_mapper.in_g.eq(depth_tester.out_g),
+            texture_mapper.in_b.eq(depth_tester.out_b),
+            texture_mapper.in_texture_buffer.eq(depth_tester.out_texture_buffer),
+            texture_mapper.in_texture_enable.eq(depth_tester.out_texture_enable),
+        ]
+
+        m.d.comb += [
+            texture_mapper.out_ready.eq(writer.ready),
+            writer.valid.eq(texture_mapper.out_valid),
+
+            writer.p_offset.eq(texture_mapper.out_p_offset),
+            writer.r.eq(texture_mapper.out_r),
+            writer.g.eq(texture_mapper.out_g),
+            writer.b.eq(texture_mapper.out_b),
         ]
 
         return m
