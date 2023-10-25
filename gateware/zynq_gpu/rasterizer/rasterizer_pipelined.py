@@ -221,6 +221,8 @@ class RasterizerDepthTester(Component):
 
 
 class ZReader(Component):
+    idle: Out(1)
+
     read_address: Out(SAxiHP.members["read_address"].signature)
     read: Out(SAxiHP.members["read"].signature)
 
@@ -306,6 +308,7 @@ class ZReader(Component):
             ]
 
         m.d.comb += [
+            self.idle.eq(~c0_valid & ~c1_valid & ~load_queue.r_rdy),
             self.in_addr_ready.eq(~stall_c0),
             stall_c0.eq(c0_valid & stall_c1),
             stall_c1.eq(c1_valid & ~c1c2_fifo.w_rdy),
@@ -412,6 +415,7 @@ class Rasterizer(Component):
 
         m.submodules.walker = walker = EdgeWalker()
         m.submodules.interpolator = interpolator = RasterizerInterpolator()
+        m.submodules.z_reader = z_reader = ZReader()
         m.submodules.depth_tester = depth_tester = RasterizerDepthTester()
         m.submodules.writer = writer = RasterizerWriter()
 
@@ -425,8 +429,14 @@ class Rasterizer(Component):
             writer.width.eq(self.width),
         ]
         wiring.connect(m, wiring.flipped(self.axi), writer.axi)
+        wiring.connect(m, wiring.flipped(self.axi2.read_address), z_reader.read_address)
+        wiring.connect(m, wiring.flipped(self.axi2.read), z_reader.read)
 
-        m.d.sync += self.idle.eq(self.command_idle & walker.idle & interpolator.idle & fifo_empty & depth_tester.idle & writer.idle)
+        idle0 = Signal()
+        m.d.sync += idle0.eq(self.command_idle & walker.idle & interpolator.idle & fifo_empty)
+        idle1 = Signal()
+        m.d.sync += idle1.eq(z_reader.idle & depth_tester.idle & writer.idle)
+        m.d.sync += self.idle.eq(idle0 & idle1)
 
         for vertex_idx in range(3):
             walker_vertex = getattr(walker.triangle.payload, f"v{vertex_idx}")
@@ -468,10 +478,6 @@ class Rasterizer(Component):
         ]
 
         accept_interp = Signal()
-
-        m.submodules.z_reader = z_reader = ZReader()
-        wiring.connect(m, wiring.flipped(self.axi2.read_address), z_reader.read_address)
-        wiring.connect(m, wiring.flipped(self.axi2.read), z_reader.read)
 
         m.d.sync += [
             self.perf_counters.stalls.depth_load_addr.eq(interpolator.out_valid & ~z_reader.in_addr_ready),
