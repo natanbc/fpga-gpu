@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from zynq_gpu.rasterizer import PixelWriter
 from zynq_gpu.zynq_ifaces import SAxiHP
 import unittest
-from ..utils import wait_until, AxiEmulator
+from ..utils import wait_until, AxiEmulator, make_testbench_process
 
 
 @dataclass
@@ -35,12 +35,13 @@ class PixelWriterTest(unittest.TestCase):
             yield dut.pixel_addr.eq(target_addr)
             yield dut.pixel_data.eq(pixel)
             yield from wait_until(dut.pixel_ready)
+            yield
             yield dut.pixel_valid.eq(0)
             yield from wait_until(dut.pixel_ready)
 
         sim = Simulator(dut)
         emulator.add_to_sim(sim)
-        sim.add_sync_process(pixel_feed)
+        sim.add_sync_process(make_testbench_process(pixel_feed))
         sim.add_clock(1e-6)
         sim.run()
 

@@ -1,7 +1,7 @@
 from amaranth.sim import *
 from zynq_gpu.rasterizer import EdgeWalker
 import unittest
-from ..utils import wait_until
+from ..utils import wait_until, make_testbench_process
 from .utils import points, points_recip, Vertex
 
 
@@ -68,6 +68,7 @@ class EdgeWalkerTest(unittest.TestCase):
                     continue
                 x, y = (yield dut.points.payload.p.x), (yield dut.points.payload.p.y)
                 st[y][x] = True
+                yield
 
             for row1, row2 in zip(st, exp_st):
                 for val1, val2 in zip(row1, row2):
@@ -81,8 +82,8 @@ class EdgeWalkerTest(unittest.TestCase):
                 raise Exception("Wrong number of points in the output")
 
         sim = Simulator(dut)
-        sim.add_sync_process(trig_feed)
-        sim.add_sync_process(point_read)
+        sim.add_sync_process(make_testbench_process(trig_feed))
+        sim.add_sync_process(make_testbench_process(point_read))
         sim.add_clock(1e-6)
         sim.run()
 
@@ -122,6 +123,7 @@ class EdgeWalkerTest(unittest.TestCase):
                 x, y = (yield dut.points.payload.p.x), (yield dut.points.payload.p.y)
                 w0, w1, w2 = (yield dut.points.payload.w0), (yield dut.points.payload.w1), (yield dut.points.payload.w2)
                 st[(x, y)] = (w0, w1, w2)
+                yield
 
             for k, exp_v in exp_st.items():
                 v = st.get(k)
@@ -129,8 +131,8 @@ class EdgeWalkerTest(unittest.TestCase):
                 assert exp_v == v, f"[{k}]: expected {exp_v}, got {v}"
 
         sim = Simulator(dut)
-        sim.add_sync_process(trig_feed)
-        sim.add_sync_process(point_read)
+        sim.add_sync_process(make_testbench_process(trig_feed))
+        sim.add_sync_process(make_testbench_process(point_read))
         sim.add_clock(1e-6)
         sim.run()
 

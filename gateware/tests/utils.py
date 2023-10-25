@@ -1,20 +1,39 @@
 import itertools
 
-from amaranth.sim import Passive
+from amaranth.sim import Passive, Settle
 from collections import deque
 from dataclasses import dataclass
 from typing import Callable, Generic, Iterable, Optional, TypeVar
 
 
-__all__ = ["wait_until", "AxiEmulator"]
+__all__ = ["wait_until", "AxiEmulator", "make_testbench_process"]
 
 
 def wait_until(signal, max_cycles=1000):
     for i in range(max_cycles):
-        yield
         if (yield signal):
             return
+        yield
     raise Exception("Took too long")
+
+
+def make_testbench_process(proc):
+    def f():
+        generator = proc()
+        try:
+            yield Settle()
+            command = generator.send(None)
+            while True:
+                try:
+                    result = yield command
+                except Exception as e:
+                    generator.throw(e)
+                    continue
+                yield Settle()
+                command = generator.send(result)
+        except StopIteration:
+            pass
+    return f
 
 
 T = TypeVar("T")
@@ -70,7 +89,7 @@ def _wrap(c):
     def f():
         yield Passive()
         yield from c()
-    return f
+    return make_testbench_process(f)
 
 
 def _addr_gen(addr: AxiAddress) -> Iterable[int]:
@@ -143,9 +162,11 @@ class AxiEmulator:
         while True:
             while True:
                 yield channel.ready.eq(queue.w_rdy())
-                yield
-                if (yield channel.valid) and (yield channel.ready):
+                yield Settle()
+                if (yield channel.ready) == 1 and (yield channel.valid) == 1:
                     break
+                else:
+                    yield
             if is_read:
                 assert self._read is not None, "Attempt to read from write only emulator"
             else:
@@ -158,6 +179,7 @@ class AxiEmulator:
                 (yield channel.id),
                 self._clock + (self._read_latency if is_read else self._write_latency),
             ))
+            yield
 
     def _ar(self):
         yield from self._address_channel(self._iface.read_address, self._ar_q, True)
@@ -176,9 +198,11 @@ class AxiEmulator:
                 yield r.id.eq(op.id)
                 yield r.data.eq(value)
                 yield r.last.eq(i == op.burst_length - 1)
-                yield
-                while not (yield r.ready):
+                while True:
+                    done = (yield r.ready)
                     yield
+                    if done:
+                        break
             yield r.valid.eq(0)
             yield r.id.eq(0)
             yield r.data.eq(0)
@@ -192,15 +216,18 @@ class AxiEmulator:
         while True:
             while True:
                 yield w.ready.eq(self._w_q.w_rdy())
-                yield
+                yield Settle()  # why is this needed?
                 if (yield w.valid) and (yield w.ready):
                     break
+                else:
+                    yield
             self._w_q.write(AxiWriteData(
                 (yield w.data),
                 (yield w.strb),
                 (yield w.last) == 1,
                 (yield w.id),
             ))
+            yield
 
     def _b(self):
         b = self._iface.write_response
@@ -220,4 +247,5 @@ class AxiEmulator:
                 self._write(addr, op.bytes_per_beat, data.data, data.strb)
             yield b.valid.eq(1)
             yield b.id.eq(op.id)
-            yield from wait_until(b.ready, 1_000_000)
+            while not (yield b.ready):
+                yield

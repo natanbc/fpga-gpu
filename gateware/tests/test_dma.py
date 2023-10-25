@@ -4,7 +4,7 @@ from zynq_gpu.zynq_ifaces import SAxiHP, SAxiGP, SAxiACP
 import random
 import struct
 import unittest
-from .utils import wait_until, AxiEmulator
+from .utils import wait_until, AxiEmulator, make_testbench_process
 
 
 def _get_width_bytes(sig):
@@ -44,6 +44,7 @@ class DMAFifoTests(unittest.TestCase):
                 yield dut.axi_read.last.eq(axi_last)
                 yield from wait_until(dut.axi_read.ready)
                 assert (yield dut.burst_end) == axi_last
+                yield
                 if slow_axi:
                     yield dut.axi_read.valid.eq(0)
                     for _ in range(10):
@@ -57,6 +58,7 @@ class DMAFifoTests(unittest.TestCase):
                 yield from wait_until(dut.data_stream.valid)
                 actual = yield dut.data_stream.data
                 assert actual == word, f"Mismatched word, expected {hex(word)}, got {hex(actual)}"
+                yield
                 if slow_read:
                     yield dut.data_stream.ready.eq(0)
                     for _ in range(10):
@@ -64,8 +66,8 @@ class DMAFifoTests(unittest.TestCase):
                     yield dut.data_stream.ready.eq(1)
 
         sim = Simulator(dut)
-        sim.add_sync_process(axi_feed)
-        sim.add_sync_process(pixel_read)
+        sim.add_sync_process(make_testbench_process(axi_feed))
+        sim.add_sync_process(make_testbench_process(pixel_read))
         sim.add_clock(1e-6)
         sim.run()
 
@@ -128,6 +130,7 @@ class DMAControlTests(unittest.TestCase):
                     f"Wrong burst length, expected {expected_burst_len}, got {actual_burst_len}"
                 done += actual_burst_len
                 pending_reads += 1
+                yield
                 if slow_axi:
                     yield dut.axi_address.ready.eq(0)
                     for _ in range(10):
@@ -149,9 +152,9 @@ class DMAControlTests(unittest.TestCase):
                 yield
 
         sim = Simulator(dut)
-        sim.add_sync_process(control)
-        sim.add_sync_process(axi_read)
-        sim.add_sync_process(burst_ends)
+        sim.add_sync_process(make_testbench_process(control))
+        sim.add_sync_process(make_testbench_process(axi_read))
+        sim.add_sync_process(make_testbench_process(burst_ends))
         sim.add_clock(1e-6)
         sim.run()
 
@@ -214,6 +217,7 @@ class DMATest(unittest.TestCase):
                 yield from wait_until(dut.data_stream.valid)
                 actual = yield dut.data_stream.data
                 assert actual == word, f"Mismatched word, expected {hex(word)}, got {hex(actual)}"
+                yield
                 if slow_read:
                     yield dut.data_stream.ready.eq(0)
                     for _ in range(10):
@@ -222,8 +226,8 @@ class DMATest(unittest.TestCase):
 
         sim = Simulator(dut)
         emulator.add_to_sim(sim)
-        sim.add_sync_process(control)
-        sim.add_sync_process(pixel_read)
+        sim.add_sync_process(make_testbench_process(control))
+        sim.add_sync_process(make_testbench_process(pixel_read))
         sim.add_clock(1e-6)
         sim.run()
 

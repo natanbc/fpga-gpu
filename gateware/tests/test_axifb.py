@@ -2,7 +2,7 @@ from amaranth.sim import *
 from zynq_gpu.axifb import PixelAdapter, AxiFramebuffer
 import struct
 import unittest
-from .utils import wait_until, AxiEmulator
+from .utils import wait_until, AxiEmulator, make_testbench_process
 
 
 class PixelAdapterTests(unittest.TestCase):
@@ -32,6 +32,7 @@ class PixelAdapterTests(unittest.TestCase):
                     for _ in range(10):
                         yield
                     yield dut.memory_stream.valid.eq(1)
+                yield
             yield dut.memory_stream.valid.eq(0)
 
         def pixel_read():
@@ -46,10 +47,11 @@ class PixelAdapterTests(unittest.TestCase):
                     for _ in range(10):
                         yield
                     yield dut.pixel_stream.ready.eq(1)
+                yield
 
         sim = Simulator(dut)
-        sim.add_sync_process(axi_feed)
-        sim.add_sync_process(pixel_read)
+        sim.add_sync_process(make_testbench_process(axi_feed))
+        sim.add_sync_process(make_testbench_process(pixel_read))
         sim.add_clock(1e-6)
         sim.run()
 
@@ -111,11 +113,12 @@ class AxiFramebufferTests(unittest.TestCase):
                     for _ in range(10):
                         yield
                     yield dut.pixel_stream.ready.eq(1)
+                yield
 
         sim = Simulator(dut)
         emulator.add_to_sim(sim)
-        sim.add_sync_process(control)
-        sim.add_sync_process(pixel_read)
+        sim.add_sync_process(make_testbench_process(control))
+        sim.add_sync_process(make_testbench_process(pixel_read))
         sim.add_clock(1e-6)
         sim.run()
 

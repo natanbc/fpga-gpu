@@ -5,7 +5,7 @@ from amaranth.sim import *
 from zynq_gpu.rasterizer.command_processor import Command, CommandProcessor
 import unittest
 from .utils import Vertex
-from ..utils import wait_until, AxiEmulator
+from ..utils import wait_until, AxiEmulator, make_testbench_process
 
 
 def pack_vertex(v: Vertex):
@@ -87,10 +87,11 @@ class CommandProcessorTest(unittest.TestCase):
                         actual = (yield getattr(p_v, attr))
                         assert expected == actual, (f"Mismatch at {i}.{sig}.{attr} ({t}): "
                                                     f"expected {expected}, got {actual}")
+                yield
 
         sim = Simulator(dut)
         emulator.add_to_sim(sim)
-        sim.add_sync_process(control)
-        sim.add_sync_process(check)
+        sim.add_sync_process(make_testbench_process(control))
+        sim.add_sync_process(make_testbench_process(check))
         sim.add_clock(1e-6)
         sim.run()
