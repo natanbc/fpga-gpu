@@ -38,6 +38,9 @@ class PixelWriterTest(unittest.TestCase):
             yield
             yield dut.pixel_valid.eq(0)
             yield from wait_until(dut.pixel_ready)
+            # Extra cycles for AXI latency
+            for _ in range(4):
+                yield
 
         sim = Simulator(dut)
         emulator.add_to_sim(sim)
