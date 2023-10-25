@@ -625,12 +625,17 @@ class Rasterizer(Component):
 
             accept_pix.eq(texture_mapper.in_ready & self.axi2.write_data.ready & self.axi2.write_address.ready),
 
-            self.axi2.write_address.valid.eq(depth_tester.out_valid & texture_mapper.in_ready & self.axi2.write_data.ready),
-            self.axi2.write_data.valid.eq(depth_tester.out_valid & texture_mapper.in_ready & self.axi2.write_address.ready),
+            self.axi2.write_address.valid.eq(
+                depth_tester.out_valid & texture_mapper.in_ready & self.axi2.write_data.ready
+            ),
+            self.axi2.write_data.valid.eq(
+                depth_tester.out_valid & texture_mapper.in_ready & self.axi2.write_address.ready
+            ),
 
             depth_tester.out_ready.eq(accept_pix),
             texture_mapper.in_valid.eq(
-                depth_tester.out_valid & self.axi2.write_data.ready & self.axi2.write_address.ready),
+                depth_tester.out_valid & self.axi2.write_data.ready & self.axi2.write_address.ready
+            ),
 
             texture_mapper.in_p_offset.eq(depth_tester.out_p_offset),
             texture_mapper.in_r.eq(depth_tester.out_r),
