@@ -106,6 +106,7 @@ class RasterizerTest(unittest.TestCase):
             yield from submit_trig(Triangle(v0, v1, v2))
             yield from submit_trig(Triangle(v1, v3, v2))
             yield from submit_trig(Triangle(b1, b2, b3))
+            yield dut.command_idle.eq(1)
             yield from wait_until(dut.idle, 100_000)
             # Give it a few more cycles to finish writing, idle goes high too early
             if mod is SequentialRasterizer:
