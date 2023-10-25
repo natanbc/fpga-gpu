@@ -321,7 +321,7 @@ class EdgeWalker(Component):
             with m.State("ORIENT2D_DELAY3"):  # area cycle 3, w0/w1/w2 cycle 2
                 m.next = "ORIENT2D_DELAY4"
             with m.State("ORIENT2D_DELAY4"):  # area done, w0/w1/w2 cycle 3
-                with m.If(area_orient2d.res == 0):
+                with m.If(area_orient2d.res <= 0):
                     m.next = "IDLE"
                 with m.Else():
                     m.d.comb += scaler.area_trigger.eq(1)
