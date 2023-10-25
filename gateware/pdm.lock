@@ -10,10 +10,10 @@ content_hash = "sha256:5ca140c15c48409dd70ef0a9668199c2f2abf30694fdd5d7fb454b441
 
 [[package]]
 name = "amaranth"
-version = "0.4.dev210+g0c3ada6"
+version = "0.4.dev227+g4e4085a"
 requires_python = "~=3.8"
 git = "https://github.com/amaranth-lang/amaranth"
-revision = "0c3ada62503359900f185a9b2d8f122b2d952013"
+revision = "4e4085a95b50e41288615d20211c6c5a41a01193"
 summary = "Amaranth hardware definition language"
 dependencies = [
     "Jinja2~=3.0",
@@ -57,11 +57,11 @@ files = [
 
 [[package]]
 name = "amaranth"
-version = "0.4.dev210+g0c3ada6"
+version = "0.4.dev227+g4e4085a"
 extras = ["builtin-yosys"]
 requires_python = "~=3.8"
 git = "https://github.com/amaranth-lang/amaranth"
-revision = "0c3ada62503359900f185a9b2d8f122b2d952013"
+revision = "4e4085a95b50e41288615d20211c6c5a41a01193"
 summary = "Amaranth hardware definition language"
 dependencies = [
     "amaranth @ git+https://github.com/amaranth-lang/amaranth",
