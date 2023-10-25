@@ -6,7 +6,7 @@ from zynq_gpu.rasterizer.rasterizer_sequential import Rasterizer as SequentialRa
 from zynq_gpu.rasterizer.rasterizer_pipelined import Rasterizer as PipelinedRasterizer
 import unittest
 from .utils import points_raster, Vertex
-from ..utils import wait_until, AxiEmulator
+from ..utils import wait_until, AxiEmulator, make_testbench_process
 
 
 @dataclass
@@ -60,6 +60,8 @@ class RasterizerTest(unittest.TestCase):
             ar_buffer=4,
             aw_buffer=4,
             w_buffer=4,
+            read_latency=2,
+            write_latency=2,
         )
         emulator_z_buffer = AxiEmulator(
             dut.axi2,
@@ -68,6 +70,8 @@ class RasterizerTest(unittest.TestCase):
             ar_buffer=8,
             aw_buffer=4,
             w_buffer=4,
+            read_latency=2,
+            write_latency=2,
         )
 
         def submit_trig(t: Triangle):
@@ -85,6 +89,7 @@ class RasterizerTest(unittest.TestCase):
                     yield getattr(d, n).eq(getattr(getattr(t, v), n))
             yield dut.triangles.valid.eq(1)
             yield from wait_until(dut.triangles.ready, 100_000)
+            yield
             yield dut.triangles.valid.eq(0)
 
         def submit_trigs():
@@ -142,9 +147,9 @@ class RasterizerTest(unittest.TestCase):
         sim = Simulator(dut)
         emulator_framebuffer.add_to_sim(sim)
         emulator_z_buffer.add_to_sim(sim)
-        sim.add_sync_process(submit_trigs)
-        sim.add_sync_process(count_cycles)
-        sim.add_sync_process(count_idles)
+        sim.add_sync_process(make_testbench_process(submit_trigs))
+        sim.add_sync_process(make_testbench_process(count_cycles))
+        sim.add_sync_process(make_testbench_process(count_idles))
         sim.add_clock(1/1e6)
         sim.run()
 

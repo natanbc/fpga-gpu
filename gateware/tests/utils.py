@@ -129,10 +129,14 @@ class AxiEmulator:
                  ar_buffer: int = 1,
                  aw_buffer: int = 1,
                  w_buffer: int = 1,
-                 read_latency: int = 0,
-                 write_latency: int = 0):
+                 read_latency: int = 1,
+                 write_latency: int = 1):
         if read is None and write is None:
             raise ValueError("At least one of read/write functions should be present")
+        if read_latency < 1:
+            raise ValueError("Read latency must be at least 1")
+        if write_latency < 1:
+            raise ValueError("Write latency must be at least 1")
         self._clock = 0
 
         self._iface = interface
