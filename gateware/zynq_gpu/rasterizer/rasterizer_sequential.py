@@ -40,24 +40,20 @@ class Rasterizer(Component):
             for sig in ["x", "y"]:
                 m.d.comb += getattr(walker_vertex, sig).eq(getattr(input_vertex, sig))
 
-        zs = Array(Signal(16) for _ in range(3))
         rs = Array(Signal(8) for _ in range(3))
         gs = Array(Signal(8) for _ in range(3))
         bs = Array(Signal(8) for _ in range(3))
+        zs = Array(Signal(16) for _ in range(3))
         ws = Array(Signal(24) for _ in range(3))
 
         p = Point(Signal(Point))
 
-        z_interp = Signal(16)
-
-        compute_interps = Signal(range(4), reset=3)
         r_interp = Signal(8)
         g_interp = Signal(8)
         b_interp = Signal(8)
+        z_interp = Signal(16)
 
-        with m.If(compute_interps < 3):
-            dest = Array([r_interp, g_interp, b_interp])[compute_interps]
-            src = Array([rs, gs, bs])[compute_interps]
+        for dest, src in zip([r_interp, g_interp, b_interp, z_interp], [rs, gs, bs, zs]):
             m.d.sync += dest.eq(
                 (
                     src[0] * ws[0] +
@@ -65,7 +61,7 @@ class Rasterizer(Component):
                     src[2] * ws[2] +
                     (1 << 23)
                 ) >> 24
-            ), compute_interps.eq(compute_interps + 1)
+            )
 
         fetch_z = Signal()
         fetch_z_offset = Signal(2)
@@ -162,15 +158,6 @@ class Rasterizer(Component):
                         m.d.sync += ws[idx].eq(getattr(walker.points.payload, f"w{idx}"))
                     m.d.sync += [
                         p.eq(walker.points.payload.p),
-                        z_interp.eq(
-                            (
-                                zs[0] * walker.points.payload.w0 +
-                                zs[1] * walker.points.payload.w1 +
-                                zs[2] * walker.points.payload.w2 +
-                                (1 << 23)
-                            ) >> 24
-                        ),
-                        compute_interps.eq(0),
                         fetch_z.eq(1),
                     ]
                     m.next = "CHECK_Z"
@@ -187,7 +174,7 @@ class Rasterizer(Component):
                 with m.If(write_z_done):
                     m.next = "WRITE_PIXEL"
             with m.State("WRITE_PIXEL"):
-                m.d.comb += writer.pixel_valid.eq(compute_interps == 3)
+                m.d.comb += writer.pixel_valid.eq(1)
                 with m.If(writer.pixel_valid & writer.pixel_ready):
                     m.next = "DRAW_POINTS"
 
