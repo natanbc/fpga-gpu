@@ -387,6 +387,8 @@ class RasterizerTextureMapper(Component):
     out_g: Out(8)
     out_b: Out(8)
 
+    texture_read: Out(TextureBufferRead)
+
     def elaborate(self, platform):
         m = Module()
 
@@ -396,14 +398,22 @@ class RasterizerTextureMapper(Component):
         r = Signal(8)
         g = Signal(8)
         b = Signal(8)
+        texture_enable = Signal()
         valid = Signal()
 
         with m.If(~stall):
+            m.d.comb += [
+                self.texture_read.en.eq(self.in_texture_enable),
+                self.texture_read.buffer.eq(self.in_texture_buffer),
+                self.texture_read.s.eq(self.in_r[1:]),
+                self.texture_read.t.eq(self.in_g[1:]),
+            ]
             m.d.sync += [
                 p_offset.eq(self.in_p_offset),
                 r.eq(self.in_r),
                 g.eq(self.in_g),
                 b.eq(self.in_b),
+                texture_enable.eq(self.in_texture_enable),
                 valid.eq(self.in_valid),
             ]
 
@@ -413,9 +423,9 @@ class RasterizerTextureMapper(Component):
 
             self.out_valid.eq(valid),
             self.out_p_offset.eq(p_offset),
-            self.out_r.eq(r),
-            self.out_g.eq(g),
-            self.out_b.eq(b),
+            self.out_r.eq(Mux(texture_enable, self.texture_read.color[0:8], r)),
+            self.out_g.eq(Mux(texture_enable, self.texture_read.color[8:16], g)),
+            self.out_b.eq(Mux(texture_enable, self.texture_read.color[16:24], b)),
         ]
 
         return m
@@ -490,6 +500,7 @@ class Rasterizer(Component):
     command_idle: In(1)
 
     triangles: In(TriangleStream)
+    texture_read: Out(TextureBufferRead)
 
     def elaborate(self, platform):
         m = Module()
@@ -513,6 +524,7 @@ class Rasterizer(Component):
         wiring.connect(m, wiring.flipped(self.axi), writer.axi)
         wiring.connect(m, wiring.flipped(self.axi2.read_address), z_reader.read_address)
         wiring.connect(m, wiring.flipped(self.axi2.read), z_reader.read)
+        wiring.connect(m, wiring.flipped(self.texture_read), texture_mapper.texture_read)
 
         idle0 = Signal()
         m.d.sync += idle0.eq(self.command_idle & walker.idle & interpolator.idle & fifo_empty)
