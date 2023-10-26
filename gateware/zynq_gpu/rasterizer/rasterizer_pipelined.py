@@ -231,7 +231,7 @@ class RasterizerDepthTester(Component):
         ]
 
         m.d.comb += [
-            self.idle.eq(~valid),
+            self.idle.eq(~valid_data),
 
             self.in_ready.eq(~stall & self.zst_valid),
             stall.eq(valid & ~self.out_ready),
@@ -552,7 +552,12 @@ class Rasterizer(Component):
         m.d.sync += idle0.eq(self.command_idle & walker.idle & interpolator.idle & fifo_empty)
         idle1 = Signal()
         m.d.sync += idle1.eq(z_reader.idle & depth_tester.idle & texture_mapper.idle & tx_wr_fifo_empty & writer.idle)
-        m.d.sync += self.idle.eq(idle0 & idle1)
+        idle_ctr = Signal(4)
+        with m.If(idle0 & idle1):
+            m.d.sync += idle_ctr.eq(Mux(idle_ctr == 15, 15, idle_ctr + 1))
+        with m.Else():
+            m.d.sync += idle_ctr.eq(0)
+        m.d.sync += self.idle.eq(idle_ctr == 15)
 
         for vertex_idx in range(3):
             walker_vertex = getattr(walker.triangle.payload, f"v{vertex_idx}")
@@ -646,7 +651,6 @@ class Rasterizer(Component):
         m.d.sync += [
             self.perf_counters.stalls.depth_store_addr.eq(depth_tester.out_valid & ~self.axi2.write_address.ready),
             self.perf_counters.stalls.depth_store_data.eq(depth_tester.out_valid & ~self.axi2.write_data.ready),
-            self.perf_counters.stalls.pixel_store.eq(depth_tester.out_valid & ~writer.ready),
         ]
         m.d.comb += [
             self.axi2.write_address.addr.eq(Cat(C(0, 3), (self.z_base + depth_tester.out_p_offset*2)[3:])),
@@ -686,6 +690,9 @@ class Rasterizer(Component):
         # Break long comb chain from PS7 AXI port to texture BRAMs
         m.submodules.tx_wr_fifo = tx_wr_fifo = SyncFIFOBuffered(width=23+24, depth=2)
 
+        m.d.sync += [
+            self.perf_counters.stalls.pixel_store.eq(tx_wr_fifo.r_rdy & ~writer.ready),
+        ]
         m.d.comb += [
             tx_wr_fifo_empty.eq(~tx_wr_fifo.r_rdy),
 

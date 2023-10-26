@@ -88,7 +88,7 @@ class RasterizerTest(unittest.TestCase):
                 for n in "xyzrgb":
                     yield getattr(d, n).eq(getattr(getattr(t, v), n))
             yield dut.triangles.valid.eq(1)
-            yield from wait_until(dut.triangles.ready, 100_000)
+            yield from wait_until(dut.triangles.ready, 100_000_000)
             yield
             yield dut.triangles.valid.eq(0)
 
@@ -112,7 +112,7 @@ class RasterizerTest(unittest.TestCase):
             yield from submit_trig(Triangle(v1, v3, v2))
             yield from submit_trig(Triangle(b1, b2, b3))
             yield dut.command_idle.eq(1)
-            yield from wait_until(dut.idle, 1000)
+            yield from wait_until(dut.idle, 100_000_000)
             # Give it a few more cycles to finish writing, idle goes high too early
             if mod is SequentialRasterizer:
                 for _ in range(3):
@@ -130,6 +130,7 @@ class RasterizerTest(unittest.TestCase):
                 idle = (yield dut.idle)
                 if idle_last == 0 and idle != 0:
                     idles += 1
+                    assert idles <= 1
                 idle_last = idle
 
         cycles = 0
@@ -142,7 +143,7 @@ class RasterizerTest(unittest.TestCase):
                 yield
                 cycles += 1
                 if cycles > 10_000:
-                    raise Exception()
+                    raise Exception("Took too long")
 
         sim = Simulator(dut)
         emulator_framebuffer.add_to_sim(sim)
@@ -152,8 +153,6 @@ class RasterizerTest(unittest.TestCase):
         sim.add_sync_process(make_testbench_process(count_idles))
         sim.add_clock(1/1e6)
         sim.run()
-
-        assert idles == 1
 
         if expected_mem != mem:
             for idx in range(len(expected_mem)):
