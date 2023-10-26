@@ -371,6 +371,8 @@ class ZReader(Component):
 
 
 class RasterizerTextureMapper(Component):
+    idle: Out(1)
+
     in_ready: Out(1)
     in_valid: In(1)
     in_p_offset: In(23)
@@ -394,12 +396,12 @@ class RasterizerTextureMapper(Component):
 
         stall = Signal()
 
-        p_offset = Signal(23)
-        r = Signal(8)
-        g = Signal(8)
-        b = Signal(8)
-        texture_enable = Signal()
-        valid = Signal()
+        s0_p_offset = Signal(23)
+        s0_r = Signal(8)
+        s0_g = Signal(8)
+        s0_b = Signal(8)
+        s0_texture_enable = Signal()
+        s0_valid = Signal()
 
         with m.If(~stall):
             m.d.comb += [
@@ -409,23 +411,42 @@ class RasterizerTextureMapper(Component):
                 self.texture_read.t.eq(self.in_g[1:]),
             ]
             m.d.sync += [
-                p_offset.eq(self.in_p_offset),
-                r.eq(self.in_r),
-                g.eq(self.in_g),
-                b.eq(self.in_b),
-                texture_enable.eq(self.in_texture_enable),
-                valid.eq(self.in_valid),
+                s0_p_offset.eq(self.in_p_offset),
+                s0_r.eq(self.in_r),
+                s0_g.eq(self.in_g),
+                s0_b.eq(self.in_b),
+                s0_texture_enable.eq(self.in_texture_enable),
+                s0_valid.eq(self.in_valid),
+            ]
+
+        s1_p_offset = Signal(23)
+        s1_r = Signal(8)
+        s1_g = Signal(8)
+        s1_b = Signal(8)
+        s1_texture_enable = Signal()
+        s1_valid = Signal()
+
+        with m.If(~stall):
+            m.d.sync += [
+                s1_p_offset.eq(s0_p_offset),
+                s1_r.eq(s0_r),
+                s1_g.eq(s0_g),
+                s1_b.eq(s0_b),
+                s1_texture_enable.eq(s0_texture_enable),
+                s1_valid.eq(s0_valid),
             ]
 
         m.d.comb += [
-            self.in_ready.eq(~stall),
-            stall.eq(valid & ~self.out_ready),
+            self.idle.eq(~s0_valid & ~s1_valid),
 
-            self.out_valid.eq(valid),
-            self.out_p_offset.eq(p_offset),
-            self.out_r.eq(Mux(texture_enable, self.texture_read.color[0:8], r)),
-            self.out_g.eq(Mux(texture_enable, self.texture_read.color[8:16], g)),
-            self.out_b.eq(Mux(texture_enable, self.texture_read.color[16:24], b)),
+            self.in_ready.eq(~stall),
+            stall.eq((s0_valid | s1_valid) & ~self.out_ready),
+
+            self.out_valid.eq(s1_valid),
+            self.out_p_offset.eq(s1_p_offset),
+            self.out_r.eq(Mux(s1_texture_enable, self.texture_read.color[0:8], s1_r)),
+            self.out_g.eq(Mux(s1_texture_enable, self.texture_read.color[8:16], s1_g)),
+            self.out_b.eq(Mux(s1_texture_enable, self.texture_read.color[16:24], s1_b)),
         ]
 
         return m
@@ -515,7 +536,8 @@ class Rasterizer(Component):
         m.d.sync += self.perf_counters.busy.eq(~self.idle)
         m.d.comb += self.axi2.aclk.eq(ClockSignal())
 
-        fifo_empty = Signal(reset=1)
+        fifo_empty = Signal()
+        tx_wr_fifo_empty = Signal()
         m.d.comb += [
             interpolator.width.eq(self.width),
             writer.fb_base.eq(self.fb_base),
@@ -529,7 +551,7 @@ class Rasterizer(Component):
         idle0 = Signal()
         m.d.sync += idle0.eq(self.command_idle & walker.idle & interpolator.idle & fifo_empty)
         idle1 = Signal()
-        m.d.sync += idle1.eq(z_reader.idle & depth_tester.idle & writer.idle)
+        m.d.sync += idle1.eq(z_reader.idle & depth_tester.idle & texture_mapper.idle & tx_wr_fifo_empty & writer.idle)
         m.d.sync += self.idle.eq(idle0 & idle1)
 
         for vertex_idx in range(3):
@@ -661,14 +683,29 @@ class Rasterizer(Component):
             texture_mapper.in_texture_enable.eq(depth_tester.out_texture_enable),
         ]
 
-        m.d.comb += [
-            texture_mapper.out_ready.eq(writer.ready),
-            writer.valid.eq(texture_mapper.out_valid),
+        # Break long comb chain from PS7 AXI port to texture BRAMs
+        m.submodules.tx_wr_fifo = tx_wr_fifo = SyncFIFOBuffered(width=23+24, depth=2)
 
-            writer.p_offset.eq(texture_mapper.out_p_offset),
-            writer.r.eq(texture_mapper.out_r),
-            writer.g.eq(texture_mapper.out_g),
-            writer.b.eq(texture_mapper.out_b),
+        m.d.comb += [
+            tx_wr_fifo_empty.eq(~tx_wr_fifo.r_rdy),
+
+            texture_mapper.out_ready.eq(tx_wr_fifo.w_rdy),
+            tx_wr_fifo.w_en.eq(texture_mapper.out_valid),
+            tx_wr_fifo.w_data.eq(Cat(
+                texture_mapper.out_b,
+                texture_mapper.out_g,
+                texture_mapper.out_r,
+                texture_mapper.out_p_offset
+            )),
+
+            tx_wr_fifo.r_en.eq(writer.ready),
+            writer.valid.eq(tx_wr_fifo.r_rdy),
+            Cat(
+                writer.b,
+                writer.g,
+                writer.r,
+                writer.p_offset
+            ).eq(tx_wr_fifo.r_data),
         ]
 
         return m

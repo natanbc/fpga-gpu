@@ -35,7 +35,7 @@ TextureBufferRead = Signature({
     "buffer": Out(2),
     "s": Out(7),
     "t": Out(7),
-    # Available on the next cycle after s/t/buffer are set
+    # Available 2 cycles after s/t/buffer/en are set
     "color": In(24),
 })
 
