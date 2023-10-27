@@ -10,15 +10,13 @@ class TextureBuffer(Component):
     write: In(TextureBufferWrite)
     read: In(TextureBufferRead)
 
-    def __init__(self, *, _test_side=None):
-        self._test_side = _test_side
+    def __init__(self):
         super().__init__()
 
     def elaborate(self, platform):
         m = Module()
 
-        side = self._test_side if self._test_side else 128
-
+        side = 128
         n_pixels = side * side
 
         pixel_idx = Signal(14)
@@ -27,8 +25,7 @@ class TextureBuffer(Component):
         sel_0 = Signal()
         sel_1 = Signal()
         m.d.comb += [
-            pixel_idx.eq(self.read.s * side + self.read.t),
-
+            pixel_idx.eq(Cat(self.read.t, self.read.s)),
         ]
         m.d.sync += [
             sel_0.eq(pixel_idx[0]),
