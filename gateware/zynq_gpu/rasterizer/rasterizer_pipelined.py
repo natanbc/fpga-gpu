@@ -403,13 +403,14 @@ class RasterizerTextureMapper(Component):
         s0_texture_enable = Signal()
         s0_valid = Signal()
 
+        m.d.comb += [
+            self.texture_read.en.eq(self.in_texture_enable),
+            self.texture_read.buffer.eq(self.in_texture_buffer),
+            self.texture_read.s.eq(self.in_r[1:]),
+            self.texture_read.t.eq(self.in_g[1:]),
+        ]
+
         with m.If(~stall):
-            m.d.comb += [
-                self.texture_read.en.eq(self.in_texture_enable),
-                self.texture_read.buffer.eq(self.in_texture_buffer),
-                self.texture_read.s.eq(self.in_r[1:]),
-                self.texture_read.t.eq(self.in_g[1:]),
-            ]
             m.d.sync += [
                 s0_p_offset.eq(self.in_p_offset),
                 s0_r.eq(self.in_r),
