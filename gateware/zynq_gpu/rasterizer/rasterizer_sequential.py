@@ -21,8 +21,6 @@ class Rasterizer(Component):
     # Unused, but keeps signature compatible with pipelined
     perf_counters: Out(PerfCounters)
 
-    command_idle: In(1)
-
     triangles: In(TriangleStream)
 
     def elaborate(self, platform):
@@ -141,7 +139,7 @@ class Rasterizer(Component):
         with m.FSM():
             with m.State("IDLE"):
                 m.d.comb += [
-                    self.idle.eq(self.command_idle),
+                    self.idle.eq(~self.triangles.valid),
                     self.triangles.ready.eq(walker.triangle.ready),
                     walker.triangle.valid.eq(self.triangles.valid),
                 ]

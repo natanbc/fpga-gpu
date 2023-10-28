@@ -14,6 +14,7 @@ class Command(Enum):
     # TODO: flags (no z buffering, etc)?
     DRAW_TRIANGLE = 0x01
     READ_TEXTURE = 0x02
+    WAIT_IDLE = 0x03
 
 
 class CommandProcessor(Component):
@@ -21,6 +22,8 @@ class CommandProcessor(Component):
 
     axi: Out(SAxiGP)
     control: In(ControlRegisters)
+
+    rasterizer_idle: In(1)
 
     triangles: Out(TriangleStream)
     buffer_clears: Out(BufferClearStream)
@@ -131,6 +134,8 @@ class CommandProcessor(Component):
                                 texture_fsm_state.eq(0),
                             ]
                             m.next = "READ_TEXTURE"
+                        with m.Case(Command.WAIT_IDLE):
+                            m.next = "WAIT_IDLE"
             with m.State("READ_VERTEXES"):
                 m.d.comb += dma.data_stream.ready.eq(1)
                 with m.If((vertex_ctr == 2) & vertex_half):
@@ -144,5 +149,8 @@ class CommandProcessor(Component):
                 with m.If(dma.data_stream.ready & dma.data_stream.valid):
                     with m.If((texture_s == texture_s_end) & (texture_t_half == texture_t_end)):
                         m.next = "READ_CMD"
+            with m.State("WAIT_IDLE"):
+                with m.If(self.rasterizer_idle):
+                    m.next = "READ_CMD"
 
         return m

@@ -519,8 +519,6 @@ class Rasterizer(Component):
 
     perf_counters: Out(PerfCounters)
 
-    command_idle: In(1)
-
     triangles: In(TriangleStream)
     texture_read: Out(TextureBufferRead)
 
@@ -550,7 +548,7 @@ class Rasterizer(Component):
         wiring.connect(m, wiring.flipped(self.texture_read), texture_mapper.texture_read)
 
         idle0 = Signal()
-        m.d.sync += idle0.eq(self.command_idle & walker.idle & interpolator.idle & fifo_empty)
+        m.d.sync += idle0.eq(walker.idle & interpolator.idle & fifo_empty)
         idle1 = Signal()
         m.d.sync += idle1.eq(z_reader.idle & depth_tester.idle & texture_mapper.idle & tx_wr_fifo_empty & writer.idle)
         idle_ctr = Signal(4)
