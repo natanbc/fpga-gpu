@@ -30,7 +30,7 @@ def pack_read_texture(r: ReadTexture):
     assert 0 <= r.t_half_start < 64, f"{r.t_half_start}"
     assert 0 <= r.t_half_end < 64, f"{r.t_half_end}"
 
-    assert r.s_start < r.s_end, f"{r.s_start} / {r.s_end}"
+    assert r.s_start <= r.s_end, f"{r.s_start} / {r.s_end}"
     assert r.t_half_start < r.t_half_end, f"{r.t_half_start} / {r.t_half_end}"
 
     expected_len = (r.s_end - r.s_start + 1) * ((r.t_half_end - r.t_half_start + 1) * 2) * 3
@@ -236,4 +236,5 @@ class CommandProcessorTest(unittest.TestCase):
         sim.add_sync_process(make_testbench_process(control))
         sim.add_sync_process(make_testbench_process(check))
         sim.add_clock(1e-6)
-        sim.run()
+        with sim.write_vcd("test.vcd"):
+            sim.run()
