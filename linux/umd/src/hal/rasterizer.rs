@@ -110,6 +110,9 @@ impl Rasterizer {
         let regs = **self.map as *mut RasterizerRegisters;
         assert_eq!(addr_of!((*regs).cmd_dma_idle).read_volatile(), 1);
 
+        self.cmd_dma_done.borrow_and_update();
+        self.cmd_done.borrow_and_update();
+
         addr_of_mut!((*regs).cmd_addr_64).write_volatile((buffer >> 6) as u32);
         addr_of_mut!((*regs).cmd_words).write_volatile(words as u32);
         addr_of_mut!((*regs).cmd_ctrl).write_volatile(
