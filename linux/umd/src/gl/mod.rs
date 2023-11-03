@@ -26,6 +26,12 @@ pub struct TextureVertex {
     pub t: f32,
 }
 
+pub enum CullMode {
+    BackFace,
+    FrontFace,
+    None,
+}
+
 pub struct Gl {
     dc: DisplayController,
     rasterizer: Rc<RefCell<Rasterizer>>,
@@ -48,6 +54,8 @@ pub struct Gl {
     depth_buffers: [(DmaBuf, usize); 2],
     frame_buffer_idx: usize,
     depth_buffer_idx: usize,
+
+    cull_mode: CullMode,
 }
 
 impl Gl {
@@ -101,6 +109,8 @@ impl Gl {
             ],
             frame_buffer_idx: 0,
             depth_buffer_idx: 0,
+
+            cull_mode: CullMode::BackFace,
         };
 
         unsafe {
@@ -133,6 +143,10 @@ impl Gl {
 
     pub fn set_model_matrix(&mut self, model: Mat4) {
         self.model = model;
+    }
+
+    pub fn set_cull_mode(&mut self, mode: CullMode) {
+        self.cull_mode = mode;
     }
 
     pub fn create_texture_buffer(&mut self) -> TextureBuffer {
@@ -210,12 +224,7 @@ impl Gl {
                 b: (vertex.b * 255.0) as u8,
             };
             if i % 3 == 2 {
-                self.cmd.draw_triangle(
-                    None,
-                    vertices[0],
-                    vertices[1],
-                    vertices[2],
-                ).await;
+                self.draw(None, &mut vertices).await;
             }
         }
     }
@@ -266,14 +275,42 @@ impl Gl {
                 b: 0
             };
             if i % 3 == 2 {
-                self.cmd.draw_triangle(
-                    Some(buffer),
-                    vertices[0],
-                    vertices[1],
-                    vertices[2],
-                ).await;
+                self.draw(Some(buffer), &mut vertices).await;
             }
         }
+    }
+
+    async fn draw(&mut self, texture: Option<u8>, vertices: &mut [Vertex; 3]) {
+        match self.cull_mode {
+            CullMode::BackFace => {
+                //Back face culling is always done in hardware, other modes have to be done in
+                //software.
+            },
+            CullMode::None|CullMode::FrontFace => {
+                fn orient2d(a: Vertex, b: Vertex, c: Vertex) -> i32 {
+                    (b[0] as i32 - a[0] as i32) * (c[1] as i32 - a[1] as i32) -
+                        (b[1] as i32 - a[1] as i32) * (c[0] as i32 - a[0] as i32)
+                }
+
+                let orientation = orient2d(vertices[0], vertices[1], vertices[2]);
+                if self.cull_mode == CullMode::None && orientation < 0 {
+                    //If culling is disabled but this triangle would be skipped during rasterization,
+                    //change the winding order to draw it
+                    let tmp = vertices[1];
+                    vertices[1] = vertices[2];
+                    vertices[2] = tmp;
+                } else if self.cull_mode == CullMode::FrontFace && orientation >= 0 {
+                    //If front face culling is enabled and this triangle is front facing, skip it.
+                    return;
+                }
+            }
+        }
+        self.cmd.draw_triangle(
+            texture,
+            vertices[0],
+            vertices[1],
+            vertices[2],
+        ).await;
     }
 
     fn transform_vertex(&self, x: f32, y: f32, z: f32) -> [u16; 3] {
