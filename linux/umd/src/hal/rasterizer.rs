@@ -55,6 +55,8 @@ impl Rasterizer {
         let irq_handle = {
             let map = map.clone();
             tokio::spawn(async move {
+                let _ = cmd_done_tx.send(());
+                let _ = cmd_dma_done_tx.send(());
                 loop {
                     uio.enable_irq();
                     uio.wait_irq().await.expect("wait_irq failed");
