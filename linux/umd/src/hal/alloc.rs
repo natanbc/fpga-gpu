@@ -31,7 +31,7 @@ impl Userdma {
         })
     }
 
-    pub fn alloc_buf(&mut self, size: usize) -> Result<(super::DmaBuf, usize)> {
+    pub fn alloc_buf(&self, size: usize) -> Result<(super::DmaBuf, usize)> {
         let mut data = UserdmaBufCreateData {
             size: size as u32,
             phys_addr: 0,

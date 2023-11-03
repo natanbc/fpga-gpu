@@ -75,15 +75,15 @@ impl DmaBuf {
         res
     }
 
-    pub fn sync_start(&mut self) -> Result<()> {
+    pub fn sync_start(&mut self) {
         self.sync(DMA_BUF_SYNC_START | DMA_BUF_SYNC_RW)
     }
 
-    pub fn sync_end(&mut self) -> Result<()> {
+    pub fn sync_end(&mut self) {
         self.sync(DMA_BUF_SYNC_END | DMA_BUF_SYNC_RW)
     }
 
-    fn sync(&mut self, flags: u64) -> Result<()> {
+    fn sync(&mut self, flags: u64) {
         let sync = DmaBufSync {
             flags,
         };
@@ -91,9 +91,8 @@ impl DmaBuf {
             libc::ioctl(self.fd, DMA_BUF_IOCTL_SYNC, &sync)
         };
         if res != 0 {
-            return Err(Error::last_os_error());
+            panic!("DMA_BUF_IOCTL_SYNC failed: {:?}", Error::last_os_error());
         }
-        Ok(())
     }
 }
 
