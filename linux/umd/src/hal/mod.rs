@@ -1,10 +1,12 @@
 use std::ops::Deref;
 
-pub mod display_controller;
-pub mod dma_buf;
-pub mod rasterizer;
-pub mod uio;
+mod alloc;
+mod display_controller;
+mod dma_buf;
+mod rasterizer;
+mod uio;
 
+pub use alloc::Userdma;
 pub use display_controller::DisplayController;
 pub use dma_buf::DmaBuf;
 pub use rasterizer::Rasterizer;

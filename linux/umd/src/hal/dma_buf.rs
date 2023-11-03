@@ -36,7 +36,7 @@ struct DmaBufImportSyncFile {
 }
 
 pub struct DmaBuf {
-    fd: libc::c_int,
+    pub(crate) fd: libc::c_int,
     size: usize,
 }
 
