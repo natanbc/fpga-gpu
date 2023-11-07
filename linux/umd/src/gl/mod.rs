@@ -26,10 +26,17 @@ pub struct TextureVertex {
     pub t: f32,
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum CullMode {
     BackFace,
     FrontFace,
     None,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum FrontFace {
+    Clockwise,
+    CounterClockwise,
 }
 
 pub struct Gl {
@@ -56,6 +63,7 @@ pub struct Gl {
     depth_buffer_idx: usize,
 
     cull_mode: CullMode,
+    front_face: FrontFace,
 }
 
 impl Gl {
@@ -90,7 +98,7 @@ impl Gl {
 
             model: Mat4::IDENTITY,
 
-            scale_device: Vec3::new(width as f32, height as f32, 65535.0),
+            scale_device: Vec3::new((width - 1) as f32, (height - 1) as f32, 65535.0),
 
             next_texture_buffer_id: 1,
             loaded_texture_buffers: [0, 0, 0, 0],
@@ -111,6 +119,7 @@ impl Gl {
             depth_buffer_idx: 0,
 
             cull_mode: CullMode::BackFace,
+            front_face: FrontFace::CounterClockwise,
         };
 
         unsafe {
@@ -147,6 +156,10 @@ impl Gl {
 
     pub fn set_cull_mode(&mut self, mode: CullMode) {
         self.cull_mode = mode;
+    }
+
+    pub fn set_front_face(&mut self, face: FrontFace) {
+        self.front_face = face;
     }
 
     pub fn create_texture_buffer(&mut self) -> TextureBuffer {
@@ -281,6 +294,12 @@ impl Gl {
     }
 
     async fn draw(&mut self, texture: Option<u8>, vertices: &mut [Vertex; 3]) {
+        if self.front_face == FrontFace::CounterClockwise {
+            let tmp = vertices[1];
+            vertices[1] = vertices[2];
+            vertices[2] = tmp;
+        }
+
         match self.cull_mode {
             CullMode::BackFace => {
                 //Back face culling is always done in hardware, other modes have to be done in
@@ -288,8 +307,8 @@ impl Gl {
             },
             CullMode::None|CullMode::FrontFace => {
                 fn orient2d(a: Vertex, b: Vertex, c: Vertex) -> i32 {
-                    (b[0] as i32 - a[0] as i32) * (c[1] as i32 - a[1] as i32) -
-                        (b[1] as i32 - a[1] as i32) * (c[0] as i32 - a[0] as i32)
+                    (b.x as i32 - a.x as i32) * (c.y as i32 - a.y as i32) -
+                        (b.y as i32 - a.y as i32) * (c.x as i32 - a.x as i32)
                 }
 
                 let orientation = orient2d(vertices[0], vertices[1], vertices[2]);
@@ -317,7 +336,7 @@ impl Gl {
         let tv = self.projection_view * self.model * Vec4::new(x, y, z, 1.0);
         let tv = tv.xyz() / tv.w;
 
-        let tv_0_1 = tv * Vec3::new(0.5, 0.5, -0.5) + 0.5;
+        let tv_0_1 = tv * Vec3::new(0.5, -0.5, -0.5) + 0.5;
         let tv_dev = tv_0_1 * self.scale_device;
         let res = tv_dev.as_uvec3().to_array();
         assert!(res[0] < self.dc.width() as u32);
