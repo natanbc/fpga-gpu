@@ -77,9 +77,7 @@ pub(crate) struct GlCommon {
     scale_device: Vec3,
 
     pub(crate) frame_buffers: [(DmaBuf, usize); 3],
-    pub(crate) depth_buffers: [(DmaBuf, usize); 2],
     pub(crate) frame_buffer_idx: usize,
-    pub(crate) depth_buffer_idx: usize,
 
     cull_mode: CullMode,
     front_face: FrontFace,
@@ -99,9 +97,6 @@ impl GlCommon {
 
         let fb_size = width * height * 3;
         let fb_size = (fb_size + 4095) / 4096 * 4096;
-        let z_size = width * height * 2;
-        let z_size = (z_size + 4095) / 4096 * 4096;
-
 
         let s = Self {
             dc,
@@ -119,12 +114,7 @@ impl GlCommon {
                 alloc.alloc_buf(fb_size)?,
                 alloc.alloc_buf(fb_size)?,
             ],
-            depth_buffers: [
-                alloc.alloc_buf(z_size)?,
-                alloc.alloc_buf(z_size)?,
-            ],
             frame_buffer_idx: 0,
-            depth_buffer_idx: 0,
 
             cull_mode: CullMode::BackFace,
             front_face: FrontFace::CounterClockwise,
@@ -171,14 +161,6 @@ impl GlCommon {
                 libc::memset(*fb_map, 0xFF, fb_map.size());
             }
         });
-
-        let depth = &mut self.depth_buffers[self.depth_buffer_idx].0;
-        let depth_map = depth.map().unwrap();
-        depth.with_sync(|| {
-            unsafe {
-                libc::memset(*depth_map, 0, depth_map.size());
-            }
-        });
     }
 
     pub async fn end_frame(&mut self) {
@@ -189,7 +171,6 @@ impl GlCommon {
         self.dc.wait_end_of_frame().await;
 
         self.frame_buffer_idx = (self.frame_buffer_idx + 1) % self.frame_buffers.len();
-        self.depth_buffer_idx = (self.depth_buffer_idx + 1) % self.depth_buffers.len();
     }
 
     pub fn transform_gouraud<'a>(

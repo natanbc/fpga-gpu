@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use glam::Mat4;
 use crate::gl::command::CommandBuffer;
-use crate::hal::{Rasterizer, Uio, Userdma};
+use crate::hal::{DmaBuf, Rasterizer, Uio, Userdma};
 
 mod command;
 mod common;
@@ -27,6 +27,9 @@ pub struct Gl {
     loaded_texture_buffers: [u32; 4],
     next_buffer_replace: u32,
 
+    depth_buffers: [(DmaBuf, usize); 2],
+    depth_buffer_idx: usize,
+
     cmd: CommandBuffer,
 }
 
@@ -42,6 +45,9 @@ impl Gl {
         let alloc = Userdma::open()?;
         let cmd = CommandBuffer::new(rasterizer.clone(), &alloc)?;
 
+        let z_size = common.width() * common.height() * 2;
+        let z_size = (z_size + 4095) / 4096 * 4096;
+
         let s = Self {
             common,
             rasterizer,
@@ -50,13 +56,19 @@ impl Gl {
             loaded_texture_buffers: [0, 0, 0, 0],
             next_buffer_replace: 0,
 
+            depth_buffers: [
+                alloc.alloc_buf(z_size)?,
+                alloc.alloc_buf(z_size)?,
+            ],
+            depth_buffer_idx: 0,
+
             cmd,
         };
 
         unsafe {
             s.rasterizer.borrow_mut().set_buffers(
                 s.common.frame_buffers[s.common.frame_buffer_idx].1,
-                s.common.depth_buffers[s.common.depth_buffer_idx].1,
+                s.depth_buffers[s.depth_buffer_idx].1,
             );
         }
 
@@ -100,10 +112,18 @@ impl Gl {
     pub async fn begin_frame(&mut self) {
         self.common.begin_frame();
 
+        let depth = &mut self.depth_buffers[self.depth_buffer_idx].0;
+        let depth_map = depth.map().unwrap();
+        depth.with_sync(|| {
+            unsafe {
+                libc::memset(*depth_map, 0, depth_map.size());
+            }
+        });
+
         unsafe {
             self.rasterizer.borrow_mut().set_buffers(
                 self.common.frame_buffers[self.common.frame_buffer_idx].1,
-                self.common.depth_buffers[self.common.depth_buffer_idx].1,
+                self.depth_buffers[self.depth_buffer_idx].1,
             );
         }
     }
@@ -115,6 +135,7 @@ impl Gl {
         self.rasterizer.borrow_mut().wait_cmd().await;
 
         self.common.end_frame().await;
+        self.depth_buffer_idx = (self.depth_buffer_idx + 1) % self.depth_buffers.len();
     }
 
     pub async fn draw_gouraud(
