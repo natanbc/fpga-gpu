@@ -1,41 +1,11 @@
 use std::cell::RefCell;
 use std::rc::Rc;
-use mycelium_bitfield::{Pack32, Pack64};
+use mycelium_bitfield::Pack32;
+use crate::gl::common::ScreenVertex;
 use crate::hal::{DmaBuf, MemoryMap, Rasterizer, Userdma};
 
 const BUFFER_SIZE_WORDS: usize = 8192;
 const BUFFER_COUNT: usize = 2;
-
-#[derive(Copy, Clone, Debug)]
-pub(crate) struct Vertex {
-    pub(crate) x: u16,
-    pub(crate) y: u16,
-    pub(crate) z: u16,
-    pub(crate) r_s: u8,
-    pub(crate) g_t: u8,
-    pub(crate) b: u8,
-}
-
-impl Vertex {
-    const X: Pack64 = Pack64::least_significant(11);
-    const Y: Pack64 = Self::X.next(11);
-    const Z: Pack64 = Self::Y.next(16);
-    const R_S: Pack64 = Self::Z.next(8);
-    const G_T: Pack64 = Self::R_S.next(8);
-    const B: Pack64 = Self::G_T.next(8);
-
-    pub fn pack(&self) -> (u32, u32) {
-        let val = Pack64::pack_in(0)
-            .pack(self.x as u64, &Self::X)
-            .pack(self.y as u64, &Self::Y)
-            .pack(self.z as u64, &Self::Z)
-            .pack(self.r_s as u64, &Self::R_S)
-            .pack(self.g_t as u64, &Self::G_T)
-            .pack(self.b as u64, &Self::B)
-            .bits();
-        (val as u32, (val >> 32) as u32)
-    }
-}
 
 pub(crate) struct CommandBuffer {
     rasterizer: Rc<RefCell<Rasterizer>>,
@@ -70,7 +40,7 @@ impl CommandBuffer {
         Ok(s)
     }
 
-    pub async fn draw_triangle(&mut self, texture: Option<u8>, v0: Vertex, v1: Vertex, v2: Vertex) {
+    pub async fn draw_triangle(&mut self, texture: Option<u8>, v0: ScreenVertex, v1: ScreenVertex, v2: ScreenVertex) {
         let cmd = Pack32::pack_in(0)
             .pack(0x01, &Self::OPCODE)
             .pack(texture.is_some() as u32, &Self::DT_TEXTURE_ENABLE)
