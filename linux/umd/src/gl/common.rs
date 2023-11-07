@@ -35,6 +35,130 @@ pub enum FrontFace {
 }
 
 #[derive(Copy, Clone, Debug)]
+struct ClipVertex {
+    pos: [f32; 4],
+    r_s: f32,
+    g_t: f32,
+    b: f32,
+}
+
+const CLIP_NEG_X: u8 = 0x01;
+const CLIP_POS_X: u8 = 0x02;
+const CLIP_NEG_Y: u8 = 0x04;
+const CLIP_POS_Y: u8 = 0x08;
+const CLIP_NEG_Z: u8 = 0x10;
+const CLIP_POS_Z: u8 = 0x20;
+
+impl ClipVertex {
+    fn classify(&self) -> u8 {
+        let mut code = 0;
+        if self.pos[0] < -self.pos[3] {
+            code |= CLIP_NEG_X;
+        }
+        if self.pos[0] > self.pos[3] {
+            code |= CLIP_POS_X;
+        }
+        if self.pos[1] < -self.pos[3] {
+            code |= CLIP_NEG_Y;
+        }
+        if self.pos[1] > self.pos[3] {
+            code |= CLIP_POS_Y;
+        }
+        if self.pos[2] < -self.pos[3] {
+            code |= CLIP_NEG_Z;
+        }
+        if self.pos[2] > self.pos[3] {
+            code |= CLIP_POS_Z;
+        }
+        code
+    }
+}
+
+fn plane_to_clip_params(plane: u8) -> (f32, usize) {
+    match plane {
+        CLIP_NEG_X => (-1.0, 0),
+        CLIP_POS_X => (1.0, 0),
+        CLIP_NEG_Y => (-1.0, 1),
+        CLIP_POS_Y => (1.0, 1),
+        CLIP_NEG_Z => (-1.0, 2),
+        CLIP_POS_Z => (1.0, 2),
+        _ => unreachable!(),
+    }
+}
+
+fn clip_against_plane(src: &Vec<ClipVertex>, plane: u8, dst: &mut Vec<ClipVertex>) {
+    let (sign, index) = plane_to_clip_params(plane);
+
+    for (i, vertex) in src.iter().enumerate() {
+        let v0 = if i == 0 {
+            src.last().unwrap()
+        } else {
+            &src[i - 1]
+        };
+        let v1 = vertex;
+
+        let p0 = v0.pos[index] * sign;
+        let p1 = v1.pos[index] * sign;
+        let w0 = v0.pos[3];
+        let w1 = v1.pos[3];
+
+        if p0 < w0 {
+            dst.push(*v0);
+        }
+
+        if (p0 < w0 && p1 >= w1) || (p0 >= w0 && p1 < w1) {
+            let denom = -p0 + p1 + w0 - w1;
+            if denom.abs() > 0.001 {
+                let t = (-p0 + w0) / denom;
+                dst.push(ClipVertex {
+                    pos: (Vec4::from_array(v0.pos) * (1.0 - t) + Vec4::from_array(v1.pos) * t).to_array(),
+                    r_s: v0.r_s * (1.0 - t) + v1.r_s * t,
+                    g_t: v0.g_t * (1.0 - t) + v1.g_t * t,
+                    b: v0.b * (1.0 - t) + v1.b * t,
+                })
+            }
+        }
+    }
+}
+
+fn clip(vertices: [ClipVertex; 3]) -> impl Iterator<Item=[ClipVertex; 3]> {
+    let vec = 'a: {
+        let c0 = vertices[0].classify();
+        let c1 = vertices[1].classify();
+        let c2 = vertices[2].classify();
+        if (c0 & c1 & c2) != 0 {
+            break 'a vec![];
+        }
+        if (c0 | c1 | c2) == 0 {
+            break 'a vec![vertices[0], vertices[1], vertices[2]];
+        }
+
+        let mut vertices_in = vertices.into_iter().collect::<Vec<_>>();
+        let mut vertices_out = vec![];
+        for plane in [CLIP_NEG_X, CLIP_POS_X, CLIP_NEG_Y, CLIP_POS_Y, CLIP_NEG_Z, CLIP_POS_Z] {
+            vertices_out.clear();
+            clip_against_plane(&vertices_in, plane, &mut vertices_out);
+            let tmp = vertices_out;
+            vertices_out = vertices_in;
+            vertices_in = tmp;
+        }
+        if vertices_out.len() > 0 {
+            if (vertices_out[0].classify() & vertices_out[1].classify() & vertices_out[2].classify()) != 0 {
+                break 'a vec![];
+            }
+        }
+        vertices_out
+    };
+    let first = vec.first().map(|v| *v).unwrap_or(ClipVertex {
+        pos: [0.0, 0.0, 0.0, 0.0],
+        r_s: 0.0,
+        g_t: 0.0,
+        b: 0.0,
+    });
+    (2..=vec.len()).map(move |i| [first, vec[i - 2], vec[i - 1]])
+}
+
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct ScreenVertex {
     pub(crate) x: u16,
     pub(crate) y: u16,
@@ -184,31 +308,60 @@ impl GlCommon {
             indices: index_buffer,
             idx: 0,
         };
-        iter.filter_map(|trig| {
-            let mut vertices = [
-                ScreenVertex {
-                    x: 0,
-                    y: 0,
-                    z: 0,
-                    r_s: 0,
-                    g_t: 0,
-                    b: 0,
-                }; 3
-            ];
-            for i in 0..3 {
-                let vertex = trig[i];
-                let transformed = self.transform_vertex(vertex.x, vertex.y, vertex.z);
-                vertices[i] = ScreenVertex {
-                    x: transformed[0],
-                    y: transformed[1],
-                    z: transformed[2],
-                    r_s: (vertex.r * 255.0) as u8,
-                    g_t: (vertex.g * 255.0) as u8,
-                    b: (vertex.b * 255.0) as u8,
-                };
+        let to_clip = {
+            let pv = self.projection_view;
+            let m = self.model;
+            move |x, y, z| {
+                (pv * m * Vec4::new(x, y, z, 1.0)).to_array()
             }
-            self.cull(vertices)
-        })
+        };
+        iter
+            .flat_map(move |trig| {
+                let mut vertices = [
+                    ClipVertex {
+                        pos: [0.0, 0.0, 0.0, 0.0],
+                        r_s: 0.0,
+                        g_t: 0.0,
+                        b: 0.0,
+                    }; 3
+                ];
+                for i in 0..3 {
+                    let vertex = trig[i];
+                    let transformed = to_clip(vertex.x, vertex.y, vertex.z);
+                    vertices[i] = ClipVertex {
+                        pos: transformed,
+                        r_s: vertex.r,
+                        g_t: vertex.g,
+                        b: vertex.b,
+                    };
+                }
+                clip(vertices)
+            })
+            .filter_map(|trig| {
+                let mut vertices = [
+                    ScreenVertex {
+                        x: 0,
+                        y: 0,
+                        z: 0,
+                        r_s: 0,
+                        g_t: 0,
+                        b: 0,
+                    }; 3
+                ];
+                for i in 0..3 {
+                    let vertex = trig[i];
+                    let p = self.clip_to_screen(vertex.pos);
+                    vertices[i] = ScreenVertex {
+                        x: p[0],
+                        y: p[1],
+                        z: p[2],
+                        r_s: (vertex.r_s * 255.0) as u8,
+                        g_t: (vertex.g_t * 255.0) as u8,
+                        b: (vertex.b * 255.0) as u8,
+                    };
+                }
+                self.cull(vertices)
+            })
     }
 
     pub fn transform_texture<'a>(
@@ -222,31 +375,60 @@ impl GlCommon {
             indices: index_buffer,
             idx: 0,
         };
-        iter.filter_map(|trig| {
-            let mut vertices = [
-                ScreenVertex {
-                    x: 0,
-                    y: 0,
-                    z: 0,
-                    r_s: 0,
-                    g_t: 0,
-                    b: 0,
-                }; 3
-            ];
-            for i in 0..3 {
-                let vertex = trig[i];
-                let transformed = self.transform_vertex(vertex.x, vertex.y, vertex.z);
-                vertices[i] = ScreenVertex {
-                    x: transformed[0],
-                    y: transformed[1],
-                    z: transformed[2],
-                    r_s: ((1.0 - vertex.s) * 255.0) as u8,
-                    g_t: (vertex.t * 255.0) as u8,
-                    b: 0,
-                };
+        let to_clip = {
+            let pv = self.projection_view;
+            let m = self.model;
+            move |x, y, z| {
+                (pv * m * Vec4::new(x, y, z, 1.0)).to_array()
             }
-            self.cull(vertices)
-        })
+        };
+        iter
+            .flat_map(move |trig| {
+                let mut vertices = [
+                    ClipVertex {
+                        pos: [0.0, 0.0, 0.0, 0.0],
+                        r_s: 0.0,
+                        g_t: 0.0,
+                        b: 0.0,
+                    }; 3
+                ];
+                for i in 0..3 {
+                    let vertex = trig[i];
+                    let transformed = to_clip(vertex.x, vertex.y, vertex.z);
+                    vertices[i] = ClipVertex {
+                        pos: transformed,
+                        r_s: vertex.s,
+                        g_t: vertex.t,
+                        b: 0.0,
+                    };
+                }
+                clip(vertices)
+            })
+            .filter_map(|trig| {
+                let mut vertices = [
+                    ScreenVertex {
+                        x: 0,
+                        y: 0,
+                        z: 0,
+                        r_s: 0,
+                        g_t: 0,
+                        b: 0,
+                    }; 3
+                ];
+                for i in 0..3 {
+                    let vertex = trig[i];
+                    let p = self.clip_to_screen(vertex.pos);
+                    vertices[i] = ScreenVertex {
+                        x: p[0],
+                        y: p[1],
+                        z: p[2],
+                        r_s: ((1.0 - vertex.r_s) * 255.0) as u8,
+                        g_t: (vertex.g_t * 255.0) as u8,
+                        b: 0,
+                    };
+                }
+                self.cull(vertices)
+            })
     }
 
     fn cull(&mut self, mut vertices: [ScreenVertex; 3]) -> Option<[ScreenVertex; 3]> {
@@ -284,8 +466,8 @@ impl GlCommon {
         return Some(vertices);
     }
 
-    fn transform_vertex(&self, x: f32, y: f32, z: f32) -> [u16; 3] {
-        let tv = self.projection_view * self.model * Vec4::new(x, y, z, 1.0);
+    fn clip_to_screen(&self, clip: [f32; 4]) -> [u16; 3] {
+        let tv = Vec4::from_array(clip);
         let tv = tv.xyz() / tv.w;
 
         let tv_0_1 = tv * Vec3::new(0.5, -0.5, -0.5) + 0.5;
