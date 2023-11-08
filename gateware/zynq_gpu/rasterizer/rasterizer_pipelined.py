@@ -455,7 +455,6 @@ class RasterizerTextureMapper(Component):
 
 class RasterizerWriter(Component):
     fb_base: In(32)
-    width: In(11)
 
     idle: Out(1)
 
@@ -540,7 +539,6 @@ class Rasterizer(Component):
         m.d.comb += [
             interpolator.width.eq(self.width),
             writer.fb_base.eq(self.fb_base),
-            writer.width.eq(self.width),
         ]
         wiring.connect(m, wiring.flipped(self.axi), writer.axi)
         wiring.connect(m, wiring.flipped(self.axi2.read_address), z_reader.read_address)
