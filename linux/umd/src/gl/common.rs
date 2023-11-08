@@ -433,9 +433,7 @@ impl GlCommon {
 
     fn cull(&mut self, mut vertices: [ScreenVertex; 3]) -> Option<[ScreenVertex; 3]> {
         if self.front_face == FrontFace::CounterClockwise {
-            let tmp = vertices[1];
-            vertices[1] = vertices[2];
-            vertices[2] = tmp;
+            vertices.swap(1, 2);
         }
 
         match self.cull_mode {
@@ -453,9 +451,7 @@ impl GlCommon {
                 if self.cull_mode == CullMode::None && orientation < 0 {
                     //If culling is disabled but this triangle would be skipped during rasterization,
                     //change the winding order to draw it
-                    let tmp = vertices[1];
-                    vertices[1] = vertices[2];
-                    vertices[2] = tmp;
+                    vertices.swap(1, 2);
                 } else if self.cull_mode == CullMode::FrontFace && orientation >= 0 {
                     //If front face culling is enabled and this triangle is front facing, skip it.
                     return None;
