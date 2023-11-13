@@ -313,10 +313,9 @@ impl GlCommon {
             idx: 0,
         };
         let to_clip = {
-            let pv = self.projection_view;
-            let m = self.model;
+            let pvm = self.projection_view * self.model;
             move |x, y, z| {
-                (pv * m * Vec4::new(x, y, z, 1.0)).to_array()
+                (pvm * Vec4::new(x, y, z, 1.0)).to_array()
             }
         };
         let to_screen = {
