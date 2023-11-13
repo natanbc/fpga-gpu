@@ -1,4 +1,4 @@
-use glam::{Mat4, Vec3, Vec4, Vec4Swizzles};
+use glam::{Mat4, Vec2, Vec3, Vec4, Vec4Swizzles};
 use mycelium_bitfield::Pack64;
 use crate::hal::{DisplayController, DmaBuf, Uio, Userdma};
 
@@ -297,10 +297,14 @@ impl GlCommon {
         self.frame_buffer_idx = (self.frame_buffer_idx + 1) % self.frame_buffers.len();
     }
 
-    pub fn transform_gouraud<'a>(
+    #[inline(always)]
+    fn transform<'a, T: Copy>(
         &'a mut self,
-        vertex_buffer: &'a [GouraudVertex],
+        vertex_buffer: &'a [T],
         index_buffer: &'a [u16],
+        get_pos: impl Fn(T) -> [f32; 3] + 'a,
+        clip_attr_map: impl Fn(T) -> [f32; 3] + 'a,
+        screen_attr_map: impl Fn(f32, f32, f32) -> [u8; 3] + 'a,
     ) -> impl Iterator<Item=[ScreenVertex; 3]> + 'a {
         assert_eq!(index_buffer.len() % 3, 0);
         let iter = TriangleIterator {
@@ -315,8 +319,25 @@ impl GlCommon {
                 (pv * m * Vec4::new(x, y, z, 1.0)).to_array()
             }
         };
+        let to_screen = {
+            let scale_device = self.scale_device;
+            let w = self.dc.width();
+            let h = self.dc.height();
+            move |trig| {
+                let tv = Vec4::from_array(trig);
+                let tv = tv.xyz() / tv.w;
+
+                let tv_0_1 = tv * Vec3::new(0.5, -0.5, -0.5) + 0.5;
+                let tv_dev = tv_0_1 * scale_device;
+                let res = tv_dev.as_uvec3().to_array();
+                assert!(res[0] < w as u32);
+                assert!(res[1] < h as u32);
+                assert!(res[2] < 65536);
+                [res[0] as u16, res[1] as u16, res[2] as u16]
+            }
+        };
         iter
-            .flat_map(move |trig| {
+            .map(move |trig| {
                 let mut vertices = [
                     ClipVertex {
                         pos: [0.0, 0.0, 0.0, 0.0],
@@ -326,18 +347,25 @@ impl GlCommon {
                     }; 3
                 ];
                 for i in 0..3 {
-                    let vertex = trig[i];
-                    let transformed = to_clip(vertex.x, vertex.y, vertex.z);
+                    let [x, y, z] = get_pos(trig[i]);
+                    let [r_s, g_t, b] = clip_attr_map(trig[i]);
+                    let transformed = to_clip(x, y, z);
                     vertices[i] = ClipVertex {
                         pos: transformed,
-                        r_s: vertex.r,
-                        g_t: vertex.g,
-                        b: vertex.b,
+                        r_s,
+                        g_t,
+                        b,
                     };
                 }
-                clip(vertices)
+                vertices
             })
             .filter_map(|trig| {
+                self.cull(trig)
+            })
+            .flat_map(move |trig| {
+                clip(trig)
+            })
+            .map(move |trig| {
                 let mut vertices = [
                     ScreenVertex {
                         x: 0,
@@ -350,18 +378,38 @@ impl GlCommon {
                 ];
                 for i in 0..3 {
                     let vertex = trig[i];
-                    let p = self.clip_to_screen(vertex.pos);
+                    let p = to_screen(vertex.pos);
+                    let [r_s, g_t, b] = screen_attr_map(vertex.r_s, vertex.g_t, vertex.b);
                     vertices[i] = ScreenVertex {
                         x: p[0],
                         y: p[1],
                         z: p[2],
-                        r_s: (vertex.r_s * 255.0) as u8,
-                        g_t: (vertex.g_t * 255.0) as u8,
-                        b: (vertex.b * 255.0) as u8,
+                        r_s,
+                        g_t,
+                        b,
                     };
                 }
-                self.cull(vertices)
+                vertices
             })
+    }
+
+    pub fn transform_gouraud<'a>(
+        &'a mut self,
+        vertex_buffer: &'a [GouraudVertex],
+        index_buffer: &'a [u16],
+    ) -> impl Iterator<Item=[ScreenVertex; 3]> + 'a {
+        #[inline(always)]
+        fn to_u8(v: f32) -> u8 {
+            (v * 255.0) as u8
+        }
+
+        self.transform(
+            vertex_buffer,
+            index_buffer,
+            |v| [v.x, v.y, v.z],
+            |v| [v.r, v.g, v.b],
+            |r, g, b| [to_u8(r), to_u8(g), to_u8(b)],
+        )
     }
 
     pub fn transform_texture<'a>(
@@ -369,69 +417,21 @@ impl GlCommon {
         vertex_buffer: &'a [TextureVertex],
         index_buffer: &'a [u16],
     ) -> impl Iterator<Item=[ScreenVertex; 3]> + 'a {
-        assert_eq!(index_buffer.len() % 3, 0);
-        let iter = TriangleIterator {
-            vertices: vertex_buffer,
-            indices: index_buffer,
-            idx: 0,
-        };
-        let to_clip = {
-            let pv = self.projection_view;
-            let m = self.model;
-            move |x, y, z| {
-                (pv * m * Vec4::new(x, y, z, 1.0)).to_array()
-            }
-        };
-        iter
-            .flat_map(move |trig| {
-                let mut vertices = [
-                    ClipVertex {
-                        pos: [0.0, 0.0, 0.0, 0.0],
-                        r_s: 0.0,
-                        g_t: 0.0,
-                        b: 0.0,
-                    }; 3
-                ];
-                for i in 0..3 {
-                    let vertex = trig[i];
-                    let transformed = to_clip(vertex.x, vertex.y, vertex.z);
-                    vertices[i] = ClipVertex {
-                        pos: transformed,
-                        r_s: vertex.s,
-                        g_t: vertex.t,
-                        b: 0.0,
-                    };
-                }
-                clip(vertices)
-            })
-            .filter_map(|trig| {
-                let mut vertices = [
-                    ScreenVertex {
-                        x: 0,
-                        y: 0,
-                        z: 0,
-                        r_s: 0,
-                        g_t: 0,
-                        b: 0,
-                    }; 3
-                ];
-                for i in 0..3 {
-                    let vertex = trig[i];
-                    let p = self.clip_to_screen(vertex.pos);
-                    vertices[i] = ScreenVertex {
-                        x: p[0],
-                        y: p[1],
-                        z: p[2],
-                        r_s: ((1.0 - vertex.r_s) * 255.0) as u8,
-                        g_t: (vertex.g_t * 255.0) as u8,
-                        b: 0,
-                    };
-                }
-                self.cull(vertices)
-            })
+        #[inline(always)]
+        fn to_u8(v: f32) -> u8 {
+            (v * 255.0) as u8
+        }
+
+        self.transform(
+            vertex_buffer,
+            index_buffer,
+            |v| [v.x, v.y, v.z],
+            |v| [v.s, v.t, 0.0],
+            |s, t, _| [to_u8(1.0 - s), to_u8(t), 0],
+        )
     }
 
-    fn cull(&mut self, mut vertices: [ScreenVertex; 3]) -> Option<[ScreenVertex; 3]> {
+    fn cull(&mut self, mut vertices: [ClipVertex; 3]) -> Option<[ClipVertex; 3]> {
         if self.front_face == FrontFace::CounterClockwise {
             vertices.swap(1, 2);
         }
@@ -442,17 +442,20 @@ impl GlCommon {
                 //software.
             },
             CullMode::None|CullMode::FrontFace => {
-                fn orient2d(a: ScreenVertex, b: ScreenVertex, c: ScreenVertex) -> i32 {
-                    (b.x as i32 - a.x as i32) * (c.y as i32 - a.y as i32) -
-                        (b.y as i32 - a.y as i32) * (c.x as i32 - a.x as i32)
+                fn xy(v: ClipVertex) -> Vec2 {
+                    let v = Vec4::from_array(v.pos);
+                    v.xy() / v.w
+                }
+                fn orient2d(a: Vec2, b: Vec2, c: Vec2) -> f32 {
+                    (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
                 }
 
-                let orientation = orient2d(vertices[0], vertices[1], vertices[2]);
-                if self.cull_mode == CullMode::None && orientation < 0 {
+                let orientation = orient2d(xy(vertices[0]), xy(vertices[1]), xy(vertices[2]));
+                if self.cull_mode == CullMode::None && orientation < 0.0 {
                     //If culling is disabled but this triangle would be skipped during rasterization,
                     //change the winding order to draw it
                     vertices.swap(1, 2);
-                } else if self.cull_mode == CullMode::FrontFace && orientation >= 0 {
+                } else if self.cull_mode == CullMode::FrontFace && orientation >= 0.0 {
                     //If front face culling is enabled and this triangle is front facing, skip it.
                     return None;
                 }
@@ -460,19 +463,6 @@ impl GlCommon {
         }
 
         return Some(vertices);
-    }
-
-    fn clip_to_screen(&self, clip: [f32; 4]) -> [u16; 3] {
-        let tv = Vec4::from_array(clip);
-        let tv = tv.xyz() / tv.w;
-
-        let tv_0_1 = tv * Vec3::new(0.5, -0.5, -0.5) + 0.5;
-        let tv_dev = tv_0_1 * self.scale_device;
-        let res = tv_dev.as_uvec3().to_array();
-        assert!(res[0] < self.dc.width() as u32);
-        assert!(res[1] < self.dc.height() as u32);
-        assert!(res[2] < 65536);
-        [res[0] as u16, res[1] as u16, res[2] as u16]
     }
 }
 
