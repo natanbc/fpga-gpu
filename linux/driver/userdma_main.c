@@ -40,7 +40,10 @@ static long get_dmabuf_addr(struct device* dev, struct sg_table* sg_tbl, void* c
     unsigned int nents;
     int count, i;
     unsigned long* res;
+    long ret;
+
     res = ctx;
+    ret = 0;
 
     sglist = sg_tbl->sgl;
     nents = sg_tbl->nents;
@@ -48,16 +51,18 @@ static long get_dmabuf_addr(struct device* dev, struct sg_table* sg_tbl, void* c
     count = dma_map_sg(dev, sglist, nents, DMA_TO_DEVICE);
 
     if(count != 1) {
-        return -EINVAL;
+        ret = -EINVAL;
+        goto out;
     }
 
     for_each_sg(sglist, sg, count, i) {
         *res = sg_dma_address(sg);
     }
 
+out:
     dma_unmap_sg(dev, sglist, nents, DMA_TO_DEVICE);
 
-    return 0;
+    return ret;
 }
 
 static long with_sg(struct device *dev, int buf_fd, long (*action)(struct device*, struct sg_table*, void*), void* ctx) {
