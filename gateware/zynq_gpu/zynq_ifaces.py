@@ -2,7 +2,7 @@ from amaranth.lib.wiring import In, Out, Signature
 from typing import Optional
 
 
-__all__ = ["SAxiGP", "MAxiGP", "SAxiHP", "SAxiACP", "ps7_assigns"]
+__all__ = ["SAxiGP", "MAxiGP", "SAxiHP", "SAxiACP", "EMIOEnet"]
 
 
 _overrides = {
@@ -170,7 +170,27 @@ SAxiACP = _axi_sig(True, 64, 3, {
 })
 
 
-def ps7_assigns(interface, port_type: str, idx: int) -> dict:
+EMIOEnet = Signature({
+    "gmii_tx_en": In(1),
+    "gmii_tx_er": In(1),
+    "mdio_mdc": In(1),
+    "mdio_o": In(1),
+    "mdio_oe": In(1),
+    # TODO?: PTP signals
+    "gmii_txd": In(8),
+    "ext_int_in": Out(1),
+    "gmii_col": Out(1),
+    "gmii_crs": Out(1),
+    "gmii_rx_clk": Out(1),
+    "gmii_rx_dv": Out(1),
+    "gmii_rx_er": Out(1),
+    "gmii_tx_clk": Out(1),
+    "mdio_i": Out(1),
+    "gmii_rxd": Out(8),
+})
+
+
+def _ps7_assigns(interface, port_type: str, idx: int) -> dict:
     if not isinstance(port_type, str) or port_type.lower() not in ["saxigp", "maxigp", "saxihp", "saxiacp"]:
         raise ValueError("Port type must be one of SAxiGP, MAxiGP, SAxiHP or SAxiACP")
     count, sig = {
