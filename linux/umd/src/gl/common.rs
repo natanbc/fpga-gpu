@@ -450,7 +450,7 @@ impl GlCommon {
                 }
 
                 let orientation = orient2d(xy(vertices[0]), xy(vertices[1]), xy(vertices[2]));
-                if self.cull_mode == CullMode::None && orientation < 0.0 {
+                if self.cull_mode == CullMode::None && orientation > 0.0 {
                     //If culling is disabled but this triangle would be skipped during rasterization,
                     //change the winding order to draw it
                     vertices.swap(1, 2);
