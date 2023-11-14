@@ -454,9 +454,13 @@ impl GlCommon {
                     //If culling is disabled but this triangle would be skipped during rasterization,
                     //change the winding order to draw it
                     vertices.swap(1, 2);
-                } else if self.cull_mode == CullMode::FrontFace && orientation >= 0.0 {
+                } else if self.cull_mode == CullMode::FrontFace {
                     //If front face culling is enabled and this triangle is front facing, skip it.
-                    return None;
+                    if orientation < 0.0 {
+                        return None;
+                    }
+                    //Otherwise, change winding order to avoid hardware culling
+                    vertices.swap(1, 2);
                 }
             }
         }
