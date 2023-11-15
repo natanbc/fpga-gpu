@@ -9,7 +9,7 @@ mod uio;
 pub use alloc::Userdma;
 pub use display_controller::DisplayController;
 pub use dma_buf::DmaBuf;
-pub use rasterizer::Rasterizer;
+pub use rasterizer::{PerfCounters, Rasterizer, Stalls};
 pub use uio::Uio;
 
 pub struct MemoryMap {

@@ -112,6 +112,10 @@ impl Gl {
         Ok(s)
     }
 
+    pub fn perf_counters(&self) -> crate::hal::PerfCounters {
+        self.rasterizer.borrow_mut().perf_counters()
+    }
+
     pub fn width(&self) -> usize {
         self.common.width()
     }

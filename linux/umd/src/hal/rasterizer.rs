@@ -15,12 +15,40 @@ pub struct Stalls {
     pub pixel_store: u32,
 }
 
+impl Stalls {
+    pub fn diff(&self, previous: Self) -> Self {
+        Self {
+            walker_searching: self.walker_searching.wrapping_sub(previous.walker_searching),
+            walker: self.walker.wrapping_sub(previous.walker),
+            depth_load_addr: self.depth_load_addr.wrapping_sub(previous.depth_load_addr),
+            depth_fifo: self.depth_fifo.wrapping_sub(previous.depth_fifo),
+            depth_store_addr: self.depth_store_addr.wrapping_sub(previous.depth_store_addr),
+            depth_store_data: self.depth_store_data.wrapping_sub(previous.depth_store_data),
+            pixel_store: self.pixel_store.wrapping_sub(previous.pixel_store),
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct PerfCounters {
     pub busy_cycles: u32,
     pub stalls: Stalls,
     pub fifo_depth: [u32; 9],
+}
+
+impl PerfCounters {
+    pub fn diff(&self, previous: Self) -> Self {
+        let mut depths = [0; 9];
+        for (i, v) in depths.iter_mut().enumerate() {
+            *v = self.fifo_depth[i].wrapping_sub(previous.fifo_depth[i]);
+        }
+        Self {
+            busy_cycles: self.busy_cycles.wrapping_sub(previous.busy_cycles),
+            stalls: self.stalls.diff(previous.stalls),
+            fifo_depth: depths,
+        }
+    }
 }
 
 #[repr(C)]
@@ -36,7 +64,6 @@ struct RasterizerRegisters {
     cmd_dma_idle: u32,
     cmd_idle: u32,
     perf_counters: PerfCounters,
-    idle_edges: u16,
 }
 
 pub struct Rasterizer {
