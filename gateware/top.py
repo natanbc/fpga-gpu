@@ -10,13 +10,15 @@ from zynq_gpu.soc import Framebuffer, Raster
 from zynq_gpu.wb_cdc import WishboneCDC
 from zynq_gpu.zynq_ifaces import MAxiGP
 
+configs = {
+    "480_60": (VideoMode.M480_60, (1, 9.500, 40.0, 8, 6)),
+    "720_60": (VideoMode.M720_60, (5, 55.875, 15.0, 3, 7)),
+    "1080_30": (VideoMode.M1080_30, (5, 39.875, 10.0, 2, 5)),
+}
 
-# Clock settings for 1080p30 + 159.5MHz (2 * pixel clock) rasterizer
-divclk_divide, clkfbout_mult_f, clkout0_divide_f, clkout1_divide, clkout2_divide, \
-    mmcm_in_domain, clkin1_period = \
-    (5, 39.875, 10.0, 2, 5, "clk100", 10.0)
-mode = VideoMode.M1080_30
+mode, (divclk_divide, clkfbout_mult_f, clkout0_divide_f, clkout1_divide, clkout2_divide), = configs["720_60"]
 
+mmcm_in_domain, clkin1_period = "clk100", 10.0
 actual_pixel_clock = (1_000_000_000 / clkin1_period) * clkfbout_mult_f / divclk_divide / clkout0_divide_f
 assert mode.pixel_clock == actual_pixel_clock, \
     f"Mismatched pixel clock: expected {mode.pixel_clock}, got {actual_pixel_clock}"
@@ -90,7 +92,7 @@ class ClockGen(Elaboratable):
                 o_O=ClockSignal(name + "_waitlock"),
             )
             # platform.add_clock_constraint(signal, freq)
-            m.d.comb += ResetSignal(name).eq(ResetSignal(mmcm_in_domain) | ~seq_reg[-1])
+            m.d.comb += ResetSignal(name).eq(ResetSignal(mmcm_in_domain))
             m.d.comb += ResetSignal(name + "_waitlock").eq(ResetSignal(mmcm_in_domain))
 
             m.d[name + "_waitlock"] += [
