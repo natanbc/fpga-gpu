@@ -171,22 +171,22 @@ SAxiACP = _axi_sig(True, 64, 3, {
 
 
 EMIOEnet = Signature({
-    "gmii_tx_en": In(1),
-    "gmii_tx_er": In(1),
-    "mdio_mdc": In(1),
-    "mdio_o": In(1),
-    "mdio_oe": In(1),
+    "gmii_tx_en": Out(1),
+    "gmii_tx_er": Out(1),
+    "mdio_mdc": Out(1),
+    "mdio_o": Out(1),
+    "mdio_oe": Out(1),
     # TODO?: PTP signals
-    "gmii_txd": In(8),
-    "ext_int_in": Out(1),
-    "gmii_col": Out(1),
-    "gmii_crs": Out(1),
-    "gmii_rx_clk": Out(1),
-    "gmii_rx_dv": Out(1),
-    "gmii_rx_er": Out(1),
-    "gmii_tx_clk": Out(1),
-    "mdio_i": Out(1),
-    "gmii_rxd": Out(8),
+    "gmii_txd": Out(8),
+    "ext_int_in": In(1),
+    "gmii_col": In(1),
+    "gmii_crs": In(1),
+    "gmii_rx_clk": In(1),
+    "gmii_rx_dv": In(1),
+    "gmii_rx_er": In(1),
+    "gmii_tx_clk": In(1),
+    "mdio_i": In(1),
+    "gmii_rxd": In(8),
 })
 
 

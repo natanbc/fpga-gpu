@@ -59,25 +59,25 @@ class PS7(Elaboratable):
             raise ValueError("ACP port already used")
         self._used["axi_acp"] = True
 
-        port = SAxiACP.create()
+        port = SAxiACP.flip().create()
         self._assigns.update(ps7_assigns(port, "saxiacp", 0))
         return port
 
     def axi_gp_m(self, n: Optional[int] = None):
         n = self._port_number("axi_gp_m", 2, n)
-        port = MAxiGP.create()
+        port = MAxiGP.flip().create()
         self._assigns.update(ps7_assigns(port, "maxigp", n))
         return port
 
     def axi_gp_s(self, n: Optional[int] = None):
         n = self._port_number("axi_gp_s", 2, n)
-        port = SAxiGP.create()
+        port = SAxiGP.flip().create()
         self._assigns.update(ps7_assigns(port, "saxigp", n))
         return port
 
     def axi_hp(self, n: Optional[int] = None):
         n = self._port_number("axi_hp", 4, n)
-        port = SAxiHP.create()
+        port = SAxiHP.flip().create()
         self._assigns.update(ps7_assigns(port, "saxihp", n))
         return port
 
@@ -90,7 +90,7 @@ class PS7(Elaboratable):
         return clk, rst
 
     def emio_enet(self, n: Optional[int]):
-        sigs = EMIOEnet.create()
+        sigs = EMIOEnet.flip().create()
         n = self._port_number("emio_enet", 2, n)
         self._assigns.update(assign_dict(
             "EMIOENET", n,
