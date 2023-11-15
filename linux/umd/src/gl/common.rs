@@ -278,7 +278,6 @@ impl GlCommon {
     }
 
     pub async fn end_frame(&mut self) {
-        //TODO: buffer_clearer async clearing
         unsafe {
             self.dc.draw_frame(self.frame_buffers[self.frame_buffer_idx].1);
         }

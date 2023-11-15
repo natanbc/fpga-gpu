@@ -138,7 +138,7 @@ impl CommandBuffer {
         written
     }
 
-    pub async fn flush_buffer(&mut self) {
+    pub async fn flush(&mut self) {
         if self.current_pos != 0 {
             self.buffers[self.current_buffer].dma_buf.sync_end();
 
@@ -158,7 +158,7 @@ impl CommandBuffer {
 
     async fn maybe_flip_buffers(&mut self) {
         if self.current_pos == BUFFER_SIZE_WORDS {
-            self.flush_buffer().await;
+            self.flush().await;
         }
     }
 }
