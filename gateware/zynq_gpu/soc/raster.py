@@ -12,7 +12,7 @@ __all__ = ["Raster"]
 
 
 class Raster(Peripheral):
-    def __init__(self, width, *, name=None, src_loc_at=1):
+    def __init__(self, width: int, *, name=None, src_loc_at=1):
         super().__init__(name=name, src_loc_at=src_loc_at)
 
         self._width = width

@@ -4,7 +4,7 @@ from amaranth_soc import wishbone
 
 from board import ebaz4205
 from zynq_gpu import axi_to_wishbone
-from zynq_gpu.hdmi.tx import HDMITx
+from zynq_gpu.hdmi import HDMITx, VideoMode
 from zynq_gpu.ps7 import PS7
 from zynq_gpu.soc import Framebuffer, Raster
 from zynq_gpu.wb_cdc import WishboneCDC
@@ -15,14 +15,19 @@ from zynq_gpu.zynq_ifaces import MAxiGP
 divclk_divide, clkfbout_mult_f, clkout0_divide_f, clkout1_divide, clkout2_divide, \
     mmcm_in_domain, clkin1_period = \
     (5, 39.875, 10.0, 2, 5, "clk100", 10.0)
+mode = VideoMode.M1080_30
+
+actual_pixel_clock = (1_000_000_000 / clkin1_period) * clkfbout_mult_f / divclk_divide / clkout0_divide_f
+assert mode.pixel_clock == actual_pixel_clock, \
+    f"Mismatched pixel clock: expected {mode.pixel_clock}, got {actual_pixel_clock}"
 
 
 class Peripherals(Elaboratable):
     def __init__(self):
         self.axi = MAxiGP.create()
 
-        self.video = Framebuffer()
-        self.rasterizer = Raster(1920)
+        self.video = Framebuffer(mode)
+        self.rasterizer = Raster(mode.width)
 
     def elaborate(self, platform):
         m = Module()
