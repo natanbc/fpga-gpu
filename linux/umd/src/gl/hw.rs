@@ -151,16 +151,6 @@ impl Gl {
     }
 
     pub async fn begin_frame(&mut self) {
-        self.common.begin_frame();
-
-        let depth = &mut self.depth_buffers[self.depth_buffer_idx].0;
-        let depth_map = depth.map().unwrap();
-        depth.with_sync(|| {
-            unsafe {
-                libc::memset(*depth_map, 0, depth_map.size());
-            }
-        });
-
         unsafe {
             self.rasterizer.borrow_mut().set_buffers(
                 self.common.frame_buffers[self.common.frame_buffer_idx].1,
@@ -171,12 +161,27 @@ impl Gl {
 
     pub async fn end_frame(&mut self) {
         //Finish drawing
-        self.cmd.sync().await;
+        self.cmd.wait_idle().await;
         self.cmd.flush_buffer().await;
         self.rasterizer.borrow_mut().wait_cmd().await;
 
-        self.common.end_frame().await;
         self.depth_buffer_idx = (self.depth_buffer_idx + 1) % self.depth_buffers.len();
+        {
+            let db = &self.depth_buffers[self.depth_buffer_idx];
+            self.cmd.clear_buffer(db.1 as u32 >> 7, db.0.size() as u32 / 8, 0).await;
+        }
+        //GlCommon::end_frame() displays the current buffer and advances the pointer
+        let next_fb_idx = (self.common.frame_buffer_idx + 1) % self.common.frame_buffers.len();
+        {
+            let db = &self.common.frame_buffers[next_fb_idx];
+            self.cmd.clear_buffer(db.1 as u32 >> 7, db.0.size() as u32 / 8, 0xFFFFFF).await;
+        }
+        self.cmd.wait_clear_idle().await;
+        self.cmd.flush_buffer().await;
+
+        //overlap display with buffer clearing
+        self.common.end_frame().await;
+        self.rasterizer.borrow_mut().wait_cmd().await;
     }
 
     pub async fn draw_gouraud(

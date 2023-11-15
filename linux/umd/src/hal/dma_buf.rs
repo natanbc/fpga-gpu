@@ -48,6 +48,10 @@ impl DmaBuf {
         }
     }
 
+    pub fn size(&self) -> usize {
+        self.size
+    }
+
     pub fn map(&mut self) -> Result<MemoryMap> {
         let map = unsafe {
             libc::mmap(

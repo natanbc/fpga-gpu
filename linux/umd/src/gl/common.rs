@@ -277,16 +277,6 @@ impl GlCommon {
         self.front_face = face;
     }
 
-    pub fn begin_frame(&mut self) {
-        let fb = &mut self.frame_buffers[self.frame_buffer_idx].0;
-        let fb_map = fb.map().unwrap();
-        fb.with_sync(|| {
-            unsafe {
-                libc::memset(*fb_map, 0xFF, fb_map.size());
-            }
-        });
-    }
-
     pub async fn end_frame(&mut self) {
         //TODO: buffer_clearer async clearing
         unsafe {

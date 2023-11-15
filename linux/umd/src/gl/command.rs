@@ -101,7 +101,7 @@ impl CommandBuffer {
         }
     }
 
-    pub async fn sync(&mut self) {
+    pub async fn wait_idle(&mut self) {
         self.write_raw(0x03).await;
     }
 
@@ -115,6 +115,10 @@ impl CommandBuffer {
             addr,
             words
         ]).await;
+    }
+
+    pub async fn wait_clear_idle(&mut self) {
+        self.write_raw(0x05).await;
     }
 
     pub async fn write_raw(&mut self, val: u32) {

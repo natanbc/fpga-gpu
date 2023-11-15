@@ -174,7 +174,14 @@ impl Gl {
     }
 
     pub async fn begin_frame(&mut self) {
-        self.common.begin_frame();
+        let fb = &mut self.common.frame_buffers[self.common.frame_buffer_idx].0;
+        let fb_map = fb.map().unwrap();
+        fb.with_sync(|| {
+            unsafe {
+                libc::memset(*fb_map, 0xFF, fb_map.size());
+            }
+        });
+
         self.depth_buffer.fill(0);
         let fb = &mut self.common.frame_buffers[self.common.frame_buffer_idx].0;
         fb.sync_start();
