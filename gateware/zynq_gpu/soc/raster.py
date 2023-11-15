@@ -1,6 +1,7 @@
 from amaranth import *
 from amaranth.lib import wiring
 from ..rasterizer import PipelinedRasterizer as Rasterizer, PerfCounters
+from ..rasterizer.buffer_clearer import BufferClearer
 from ..rasterizer.command_processor import CommandProcessor
 from ..rasterizer.texture_buffer import TextureBuffer
 from ..zynq_ifaces import SAxiGP, SAxiHP
@@ -18,6 +19,7 @@ class Raster(Peripheral):
 
         self.axi1 = SAxiHP.create()
         self.axi2 = SAxiHP.create()
+        self.axi3 = SAxiHP.create()
         self.axi_cmd = SAxiGP.create()
 
         self._fb_base = self.csr(32, "rw")
@@ -71,7 +73,14 @@ class Raster(Peripheral):
         wiring.connect(m, command_processor.texture_writes, texture_buffer.write)
         wiring.connect(m, rasterizer.texture_read, texture_buffer.read)
 
-        m.d.comb += command_processor.rasterizer_idle.eq(rasterizer.idle)
+        m.submodules.buffer_clearer = buffer_clearer = BufferClearer()
+        wiring.connect(m, buffer_clearer.axi, wiring.flipped(self.axi3))
+        wiring.connect(m, command_processor.buffer_clears, buffer_clearer.control),
+
+        m.d.comb += [
+            command_processor.rasterizer_idle.eq(rasterizer.idle),
+            command_processor.clearer_idle.eq(buffer_clearer.idle),
+        ]
 
         for reg, field in zip(
                 [self._fb_base, self._z_base, self._cmd_addr_64, self._cmd_words],

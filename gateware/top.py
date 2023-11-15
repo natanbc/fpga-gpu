@@ -189,7 +189,8 @@ class Top(Elaboratable):
         wiring.connect(m, peripherals.video.axi, ps7.axi_hp(0))
 
         wiring.connect(m, peripherals.rasterizer.axi1, ps7.axi_hp(1))
-        wiring.connect(m, peripherals.rasterizer.axi2, ps7.axi_hp(3))
+        wiring.connect(m, peripherals.rasterizer.axi2, ps7.axi_hp(2))
+        wiring.connect(m, peripherals.rasterizer.axi3, ps7.axi_hp(3))
         wiring.connect(m, peripherals.rasterizer.axi_cmd, ps7.axi_gp_s(0))
 
         hdmi_port = platform.request("hdmi_tx", 0)

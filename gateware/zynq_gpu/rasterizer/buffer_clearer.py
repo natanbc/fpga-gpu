@@ -7,6 +7,7 @@ from ..zynq_ifaces import SAxiHP
 class BufferClearer(Component):
     axi: Out(SAxiHP)
     control: In(BufferClearStream)
+    idle: Out(1)
 
     def elaborate(self, platform):
         m = Module()
@@ -31,6 +32,7 @@ class BufferClearer(Component):
         with m.If(data_ctr == 0):
             m.d.comb += [
                 self.control.ready.eq(1),
+                self.idle.eq(1),
             ]
             with m.If(self.control.valid):
                 m.d.sync += [

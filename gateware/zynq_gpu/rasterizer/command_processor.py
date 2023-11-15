@@ -16,6 +16,7 @@ class Command(Enum):
     READ_TEXTURE = 0x02
     WAIT_IDLE = 0x03
     CLEAR_BUFFER = 0x04
+    WAIT_CLEAR_IDLE = 0x05
 
 
 class CommandProcessor(Component):
@@ -25,6 +26,7 @@ class CommandProcessor(Component):
     control: In(ControlRegisters)
 
     rasterizer_idle: In(1)
+    clearer_idle: In(1)
 
     triangles: Out(TriangleStream)
     buffer_clears: Out(BufferClearStream)
@@ -144,6 +146,8 @@ class CommandProcessor(Component):
                                 self.buffer_clears.payload.pattern.eq(dma.data_stream.data[8:]),
                             ]
                             m.next = "READ_BUFFER_CLEAR"
+                        with m.Case(Command.WAIT_CLEAR_IDLE):
+                            m.next = "WAIT_CLEAR_IDLE"
             with m.State("READ_VERTEXES"):
                 m.d.comb += dma.data_stream.ready.eq(1)
                 with m.If((vertex_ctr == 2) & vertex_half):
@@ -174,6 +178,9 @@ class CommandProcessor(Component):
             with m.State("CLEAR_BUFFER"):
                 m.d.comb += self.buffer_clears.valid.eq(1)
                 with m.If(self.buffer_clears.ready):
+                    m.next = "READ_CMD"
+            with m.State("WAIT_CLEAR_IDLE"):
+                with m.If(self.clearer_idle):
                     m.next = "READ_CMD"
 
         return m
