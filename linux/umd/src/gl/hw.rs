@@ -158,6 +158,8 @@ impl Gl {
             );
         }
 
+        //Wait for current frame/depth buffer clearing to finish
+        self.cmd.wait_clear_idle().await;
         self.depth_buffer_idx = (self.depth_buffer_idx + 1) % self.depth_buffers.len();
         {
             let db = &self.depth_buffers[self.depth_buffer_idx];
@@ -177,12 +179,8 @@ impl Gl {
         self.cmd.flush().await;
         self.rasterizer.borrow_mut().wait_cmd().await;
 
-        self.cmd.wait_clear_idle().await;
-        self.cmd.flush().await;
-
         //overlap display with buffer clearing
         self.common.end_frame().await;
-        self.rasterizer.borrow_mut().wait_cmd().await;
     }
 
     pub async fn draw_gouraud(
