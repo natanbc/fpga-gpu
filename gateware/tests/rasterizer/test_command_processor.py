@@ -19,6 +19,13 @@ class ReadTexture:
     data: bytes
 
 
+@dataclass
+class BufferClear:
+    pattern: int
+    addr: int
+    words: int
+
+
 def pack_vertex(v: Vertex):
     return v.x | (v.y << 11) | (v.z << 22) | (v.r << 38) | (v.g << 46) | (v.b << 54)
 
@@ -51,6 +58,14 @@ def pack_read_texture(r: ReadTexture):
             ((r.t_half_end & 0b11_111) << 27)
     )
     return struct.pack("<I", cmd)
+
+
+def pack_buffer_clear(c: BufferClear):
+    cmd = (
+        Command.CLEAR_BUFFER.value |
+        (c.pattern << 8)
+    )
+    return struct.pack("<3I", cmd, c.addr, c.words)
 
 
 def check_triangle(dut, i, triangle):
@@ -236,5 +251,69 @@ class CommandProcessorTest(unittest.TestCase):
         sim.add_sync_process(make_testbench_process(control))
         sim.add_sync_process(make_testbench_process(check))
         sim.add_clock(1e-6)
-        with sim.write_vcd("test.vcd"):
-            sim.run()
+        sim.run()
+
+    def test_clear(self):
+        dut = CommandProcessor()
+
+        base_addr = 0x4000_0000
+        command_mem = bytes()
+
+        clears = [
+            BufferClear(0xFFFFFF, 0x1AABBCC, 0x69420),
+            BufferClear(0x010203, 0x1694200, 0x1234),
+        ]
+        triangle = (
+            Vertex(0x1, 0x2, 0x3, 0x4, 0x5, 0x6),
+            Vertex(0x7, 0x8, 0x9, 0xA, 0xB, 0xC),
+            Vertex(0xD, 0xE, 0xF, 0x0, 0x1, 0x2),
+            False,
+            0b00,
+        )
+
+        for clr in clears:
+            command_mem += pack_buffer_clear(clr)
+        command_mem += struct.pack("<I", Command.DRAW_TRIANGLE.value | (int(triangle[3]) << 8) | (triangle[4] << 9))
+        command_mem += struct.pack("<3Q", *[pack_vertex(v) for v in triangle[:3]])
+
+        assert len(command_mem) % 4 == 0
+
+        def read(addr, _):
+            off = addr - base_addr
+            return struct.unpack("<I", command_mem[off:off+4])[0]
+
+        emulator = AxiEmulator(dut.axi, read, None)
+
+        def control():
+            yield dut.control.base_addr.eq(base_addr >> 6)
+            yield dut.control.words.eq(len(command_mem) // 4)
+            yield dut.control.trigger.eq(1)
+            yield
+            yield dut.control.trigger.eq(0)
+
+            while (yield dut.control.idle):
+                yield
+            yield from wait_until(dut.control.idle, 1000)
+
+        def check():
+            yield dut.buffer_clears.ready.eq(1)
+            for clear in clears:
+                yield from wait_until(dut.buffer_clears.valid)
+                act_pattern = (yield dut.buffer_clears.payload.pattern)
+                act_base = (yield dut.buffer_clears.payload.base_addr)
+                act_words = (yield dut.buffer_clears.payload.words)
+                assert act_pattern == clear.pattern, f"{act_pattern:06X} / {clear.pattern:06X}"
+                assert act_base == clear.addr, f"{act_base:08X} / {clear.addr:08X}"
+                assert act_words == clear.words, f"{act_words} / {clear.words}"
+                yield
+            yield dut.triangles.ready.eq(1)
+            yield from wait_until(dut.triangles.valid)
+            yield from check_triangle(dut, 0, triangle)
+            yield
+
+        sim = Simulator(dut)
+        emulator.add_to_sim(sim)
+        sim.add_sync_process(make_testbench_process(control))
+        sim.add_sync_process(make_testbench_process(check))
+        sim.add_clock(1e-6)
+        sim.run()

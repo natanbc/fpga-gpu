@@ -15,6 +15,7 @@ class Command(Enum):
     DRAW_TRIANGLE = 0x01
     READ_TEXTURE = 0x02
     WAIT_IDLE = 0x03
+    CLEAR_BUFFER = 0x04
 
 
 class CommandProcessor(Component):
@@ -92,6 +93,8 @@ class CommandProcessor(Component):
                         self.texture_writes.addr.eq(Cat(texture_t_half, texture_s)),
                     ]
 
+        buffer_clear_word = Signal(1)
+
         with m.FSM():
             with m.State("READ_CMD"):
                 m.d.comb += [
@@ -136,6 +139,11 @@ class CommandProcessor(Component):
                             m.next = "READ_TEXTURE"
                         with m.Case(Command.WAIT_IDLE):
                             m.next = "WAIT_IDLE"
+                        with m.Case(Command.CLEAR_BUFFER):
+                            m.d.sync += [
+                                self.buffer_clears.payload.pattern.eq(dma.data_stream.data[8:]),
+                            ]
+                            m.next = "READ_BUFFER_CLEAR"
             with m.State("READ_VERTEXES"):
                 m.d.comb += dma.data_stream.ready.eq(1)
                 with m.If((vertex_ctr == 2) & vertex_half):
@@ -151,6 +159,21 @@ class CommandProcessor(Component):
                         m.next = "READ_CMD"
             with m.State("WAIT_IDLE"):
                 with m.If(self.rasterizer_idle):
+                    m.next = "READ_CMD"
+            with m.State("READ_BUFFER_CLEAR"):
+                m.d.comb += dma.data_stream.ready.eq(1)
+                with m.Switch(buffer_clear_word):
+                    with m.Case(0):
+                        m.d.sync += self.buffer_clears.payload.base_addr.eq(dma.data_stream.data)
+                    with m.Case(1):
+                        m.d.sync += self.buffer_clears.payload.words.eq(dma.data_stream.data)
+                with m.If(dma.data_stream.valid):
+                    m.d.sync += buffer_clear_word.eq(buffer_clear_word + 1)
+                    with m.If(buffer_clear_word):
+                        m.next = "CLEAR_BUFFER"
+            with m.State("CLEAR_BUFFER"):
+                m.d.comb += self.buffer_clears.valid.eq(1)
+                with m.If(self.buffer_clears.ready):
                     m.next = "READ_CMD"
 
         return m

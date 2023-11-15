@@ -25,6 +25,8 @@ impl CommandBuffer {
     const LT_T_HIGH: Pack32 = Self::LT_S_END.next(1);
     const LT_T_START: Pack32 = Self::LT_T_HIGH.next(5);
     const LT_T_END: Pack32 = Self::LT_T_START.next(5);
+    const CB_PAD: Pack32 = Self::OPCODE.next(2);
+    const CB_PATTERN: Pack32 = Self::CB_PAD.next(24);
 
     pub fn new(rasterizer: Rc<RefCell<Rasterizer>>, alloc: &Userdma) -> std::io::Result<Self> {
         let mut s = Self {
@@ -46,12 +48,14 @@ impl CommandBuffer {
             .pack(texture.is_some() as u32, &Self::DT_TEXTURE_ENABLE)
             .pack(texture.unwrap_or(0) as u32, &Self::DT_TEXTURE_BUFFER)
             .bits();
-        self.write_raw(cmd).await;
-        for v in [v0, v1, v2] {
+        let mut data = [0; 7];
+        data[0] = cmd;
+        for (i, v) in [v0, v1, v2].iter().enumerate() {
             let (w0, w1) = v.pack();
-            self.write_raw(w0).await;
-            self.write_raw(w1).await;
+            data[i * 2 + 1] = w0;
+            data[i * 2 + 2] = w1;
         }
+        self.write_raw_slice(&data[..]).await;
     }
 
     pub async fn load_texture(&mut self, buffer: u8, start_s: u8, end_s: u8, start_t: u8, end_t: u8, data: &[u8]) {
@@ -99,6 +103,18 @@ impl CommandBuffer {
 
     pub async fn sync(&mut self) {
         self.write_raw(0x03).await;
+    }
+
+    pub async fn clear_buffer(&mut self, addr: u32, words: u32, pattern: u32) {
+        let cmd = Pack32::pack_in(0)
+            .pack(0x04, &Self::OPCODE)
+            .pack(pattern, &Self::CB_PATTERN)
+            .bits();
+        self.write_raw_slice(&[
+            cmd,
+            addr,
+            words
+        ]).await;
     }
 
     pub async fn write_raw(&mut self, val: u32) {
