@@ -36,8 +36,8 @@ class Raster(Peripheral):
         self._stall_ctrs = {
             0: (self.csr(32, "r", name="perf_counter_busy_cycles"), perf_counters.busy),
         }
-        for i, r in enumerate(["walker_searching", "depth_load_addr", "depth_fifo", "depth_store_addr",
-                               "depth_store_data", "pixel_store"]):
+        for i, r in enumerate(["walker_searching", "depth_load_addr", "depth_fifo", "depth_load_data",
+                               "depth_store_addr", "depth_store_data", "pixel_store"]):
             self._stall_ctrs[len(self._stall_ctrs)] = (
                 self.csr(32, "r", name=f"perf_counter_stall_{r}"),
                 getattr(perf_counters.stalls, r),

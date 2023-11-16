@@ -603,6 +603,7 @@ class Rasterizer(Component):
         m.d.sync += [
             self.perf_counters.stalls.depth_load_addr.eq(interpolator.out_valid & ~z_reader.in_addr_ready),
             self.perf_counters.stalls.depth_fifo.eq(interpolator.out_valid & ~fifo.r_rdy),
+            self.perf_counters.stalls.depth_load_data.eq(z_reader.read.ready & ~z_reader.read.valid),
         ]
         m.d.comb += [
             accept_interp.eq(fifo.w_rdy & z_reader.in_addr_ready),

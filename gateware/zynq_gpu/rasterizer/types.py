@@ -68,6 +68,7 @@ PerfCounters = StructLayout({
         "walker_searching": 1,
         "depth_load_addr": 1,
         "depth_fifo": 1,
+        "depth_load_data": 1,
         "depth_store_addr": 1,
         "depth_store_data": 1,
         "pixel_store": 1,
