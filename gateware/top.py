@@ -92,7 +92,7 @@ class ClockGen(Elaboratable):
                 o_O=ClockSignal(name + "_waitlock"),
             )
             # platform.add_clock_constraint(signal, freq)
-            m.d.comb += ResetSignal(name).eq(ResetSignal(mmcm_in_domain))
+            m.d.comb += ResetSignal(name).eq(ResetSignal(mmcm_in_domain) | ~seq_reg[-1])
             m.d.comb += ResetSignal(name + "_waitlock").eq(ResetSignal(mmcm_in_domain))
 
             m.d[name + "_waitlock"] += [
