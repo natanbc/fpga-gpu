@@ -66,7 +66,6 @@ PerfCounters = StructLayout({
     "busy": 1,
     "stalls": StructLayout({
         "walker_searching": 1,
-        "walker": 1,
         "depth_load_addr": 1,
         "depth_fifo": 1,
         "depth_store_addr": 1,

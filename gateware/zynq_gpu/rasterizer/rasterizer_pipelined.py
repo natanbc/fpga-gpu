@@ -578,7 +578,6 @@ class Rasterizer(Component):
 
         m.d.sync += [
             self.perf_counters.stalls.walker_searching.eq(~walker.idle & ~walker.points.valid & walker.points.ready),
-            self.perf_counters.stalls.walker.eq(walker.points.valid & ~walker.points.ready),
         ]
         m.d.comb += [
             walker.points.ready.eq(interpolator.in_ready),

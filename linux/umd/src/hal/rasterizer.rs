@@ -7,7 +7,6 @@ use crate::hal::{MemoryMap, Uio};
 #[derive(Copy, Clone, Debug)]
 pub struct Stalls {
     pub walker_searching: u32,
-    pub walker: u32,
     pub depth_load_addr: u32,
     pub depth_fifo: u32,
     pub depth_store_addr: u32,
@@ -19,7 +18,6 @@ impl Stalls {
     pub fn diff(&self, previous: Self) -> Self {
         Self {
             walker_searching: self.walker_searching.wrapping_sub(previous.walker_searching),
-            walker: self.walker.wrapping_sub(previous.walker),
             depth_load_addr: self.depth_load_addr.wrapping_sub(previous.depth_load_addr),
             depth_fifo: self.depth_fifo.wrapping_sub(previous.depth_fifo),
             depth_store_addr: self.depth_store_addr.wrapping_sub(previous.depth_store_addr),
