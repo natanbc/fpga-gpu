@@ -240,7 +240,7 @@ impl GlCommon {
             ],
             frame_buffer_idx: 0,
 
-            cull_mode: CullMode::BackFace,
+            cull_mode: CullMode::None,
             front_face: FrontFace::CounterClockwise,
         };
 
