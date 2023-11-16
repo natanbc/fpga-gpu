@@ -167,7 +167,7 @@ impl Gl {
         }
     }
 
-    pub async fn end_frame(&mut self) {
+    pub async fn end_frame(&mut self, draw: bool) {
         //GlCommon::end_frame() displays the current buffer and advances the pointer
         let next_fb_idx = (self.common.frame_buffer_idx + 1) % self.common.frame_buffers.len();
         {
@@ -180,7 +180,7 @@ impl Gl {
         self.rasterizer.borrow_mut().wait_cmd().await;
 
         //overlap display with buffer clearing
-        self.common.end_frame().await;
+        self.common.end_frame(draw).await;
     }
 
     pub async fn draw_gouraud(

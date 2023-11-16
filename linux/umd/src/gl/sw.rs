@@ -188,10 +188,12 @@ impl Gl {
         self.fb_map = Some(fb.map().expect("Failed to map frame buffer"));
     }
 
-    pub async fn end_frame(&mut self) {
+    pub async fn end_frame(&mut self, draw: bool) {
         self.fb_map = None;
-        self.common.frame_buffers[self.common.frame_buffer_idx].0.sync_end();
-        self.common.end_frame().await;
+        if draw {
+            self.common.frame_buffers[self.common.frame_buffer_idx].0.sync_end();
+        }
+        self.common.end_frame(draw).await;
     }
 
     pub async fn draw_gouraud(

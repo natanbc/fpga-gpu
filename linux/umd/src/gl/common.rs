@@ -277,11 +277,13 @@ impl GlCommon {
         self.front_face = face;
     }
 
-    pub async fn end_frame(&mut self) {
-        unsafe {
-            self.dc.draw_frame(self.frame_buffers[self.frame_buffer_idx].1);
+    pub async fn end_frame(&mut self, draw: bool) {
+        if draw {
+            unsafe {
+                self.dc.draw_frame(self.frame_buffers[self.frame_buffer_idx].1);
+            }
+            self.dc.wait_end_of_frame().await;
         }
-        self.dc.wait_end_of_frame().await;
 
         self.frame_buffer_idx = (self.frame_buffer_idx + 1) % self.frame_buffers.len();
     }
