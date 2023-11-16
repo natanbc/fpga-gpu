@@ -362,7 +362,7 @@ class ZReader(Component):
                 last_word.word_select(load_offset, 16),
                 self.read.data.word_select(load_offset, 16),
             )),
-            self.out_z_valid.eq(self.read.valid | (load_queue.r_rdy & load_same_addr)),
+            self.out_z_valid.eq(load_queue.r_rdy & (self.read.valid | load_same_addr)),
         ]
         with m.If(self.read.ready & self.read.valid):
             m.d.sync += last_word.eq(self.read.data)
