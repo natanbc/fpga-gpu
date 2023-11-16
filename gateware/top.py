@@ -77,14 +77,22 @@ class ClockGen(Elaboratable):
 
         def add_clock(signal, name):
             m.domains += ClockDomain(name)
-            seq_reg = Signal(8, name="seq_reg_" + name, reset_less=True)
+            seq_reg = Signal(9, name="seq_reg_" + name, attrs={
+                "KEEP": "TRUE",
+                "ASYNC_REG": "TRUE",
+            })
             m.domains += ClockDomain(name + "_waitlock")
 
             m.submodules[f"bufgce_{name}"] = Instance(
                 "BUFGCE",
                 i_I=signal,
-                i_CE=seq_reg[-1],
+                i_CE=seq_reg[-2],
                 o_O=ClockSignal(name),
+            )
+            m.submodules[f"bufg_rst_{name}"] = Instance(
+                "BUFG",
+                i_I=~seq_reg[-1],
+                o_O=ResetSignal(name),
             )
             m.submodules[f"bufh_{name}"] = Instance(
                 "BUFH",
@@ -92,7 +100,6 @@ class ClockGen(Elaboratable):
                 o_O=ClockSignal(name + "_waitlock"),
             )
             # platform.add_clock_constraint(signal, freq)
-            m.d.comb += ResetSignal(name).eq(ResetSignal(mmcm_in_domain) | ~seq_reg[-1])
             m.d.comb += ResetSignal(name + "_waitlock").eq(ResetSignal(mmcm_in_domain))
 
             m.d[name + "_waitlock"] += [
@@ -157,7 +164,7 @@ class ClockGen(Elaboratable):
             i_CLKIN1=mmcm_clkin1,
             i_CLKIN2=Signal(),
 
-            i_CLKINSEL=Signal(name="clkin_sel", reset=1),
+            i_CLKINSEL=Const(1),
 
             o_LOCKED=locked_int,
 
