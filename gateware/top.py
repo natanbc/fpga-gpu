@@ -242,6 +242,8 @@ set_property BITSTREAM.GENERAL.COMPRESS true [current_design]
 # set_property CLOCK_DEDICATED_ROUTE FALSE [get_nets {pin_enet_0__tx_clk/enet_0__tx_clk__i}]
 set_property CLOCK_DEDICATED_ROUTE FALSE [get_nets {pin_enet_0__tx_clk/pin_enet_0__tx_clk_enet_0__tx_clk__i}]
 
+set_false_path -to [get_cells peripherals/cdc_raster/req_fifo/rst_cdc/*]
+set_false_path -to [get_cells peripherals/cdc_raster/res_fifo/rst_cdc/*]
 set_false_path -to [get_cells peripherals/cdc_raster/req_fifo/_0__reg[*]]
 set_false_path -to [get_cells peripherals/cdc_raster/res_fifo/_0__reg[*]]
 """, script_after_read="""
