@@ -59,13 +59,6 @@
             interrupts = <0 31 0x04>;
             interrupt-parent = <&intc>;
         };
-
-        audio@40002000 {
-            compatible = "generic-uio";
-            reg = <0x40002000 0x1000>;
-            interrupts = <0 30 0x04>;
-            interrupt-parent = <&intc>;
-        };
     };
 
     cpus {
