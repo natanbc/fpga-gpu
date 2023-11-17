@@ -1,0 +1,17 @@
+[package]
+name = "cubes"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+umd = { path = "../umd" }
+glam = { version = "0.24", default-features = true, features = ["bytemuck", "debug-glam-assert"] }
+tokio = { version = "1.33.0", features = ["full"] }
+rolling-stats = "0.7.0"
+
+[features]
+default = []
+headless = []
+software = []

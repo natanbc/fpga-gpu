@@ -1,0 +1,4 @@
+[toolchain]
+channel = "stable"
+components = ["rust-src"]
+targets = ["armv7-unknown-linux-musleabihf"]
