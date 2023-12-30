@@ -6,17 +6,20 @@ from .utils import wait_until
 
 class WishboneCDCTests(unittest.TestCase):
     @staticmethod
-    def _do_test(target_clock: float):
+    def _do_test(target_clock: float, target_halt: bool = False):
         dut = WishboneCDC(addr_width=32, features={"err"})
 
         def initiator():
-            for i in range(10):
+            for i in range(20):
                 yield dut.i_bus.adr.eq(i)
                 yield dut.i_bus.stb.eq(1)
                 yield dut.i_bus.cyc.eq(1)
                 yield
                 yield from wait_until(dut.i_bus.ack | dut.i_bus.err)
-                if i & 1:
+                if (yield dut.i_halt):
+                    assert (yield dut.i_bus.ack) == 0
+                    assert (yield dut.i_bus.err) == 1
+                elif i & 1:
                     assert (yield dut.i_bus.ack) == 0
                     assert (yield dut.i_bus.err) == 1
                     assert (yield dut.i_bus.dat_r) == 0
@@ -26,11 +29,20 @@ class WishboneCDCTests(unittest.TestCase):
                     assert (yield dut.i_bus.dat_r) == i
                 yield dut.i_bus.stb.eq(0)
                 yield dut.i_bus.cyc.eq(0)
+                if target_halt:
+                    if i == 5:
+                        yield dut.i_halt.eq(1)
+                    if i == 15:
+                        yield dut.i_halt.eq(0)
                 yield
 
         def target():
             yield Passive()
             while True:
+                # Do nothing while halted
+                if (yield dut.i_halt):
+                    yield
+                    continue
                 yield dut.t_bus.dat_r.eq(0)
                 yield dut.t_bus.ack.eq(0)
                 yield dut.t_bus.err.eq(0)
@@ -58,3 +70,12 @@ class WishboneCDCTests(unittest.TestCase):
 
     def test_faster(self):
         self._do_test(1e-7)
+
+    def test_same_freq_halt(self):
+        self._do_test(1e-6, True)
+
+    def test_slower_halt(self):
+        self._do_test(1e-5, True)
+
+    def test_faster_halt(self):
+        self._do_test(1e-7, True)
