@@ -256,4 +256,6 @@ set_false_path -to [get_cells peripherals/cdc_raster/res_fifo/_0__reg[*]]
 """, script_after_read="""
 set_param general.maxThreads 12
 auto_detect_xpm
+""", script_after_bitstream="""
+write_cfgmem -force -format bin -interface smapx32 -disablebitswap -loadbit "up 0 top.bit" top.swap.bin
 """)
