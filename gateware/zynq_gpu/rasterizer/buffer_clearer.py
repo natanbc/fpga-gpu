@@ -20,6 +20,7 @@ class BufferClearer(Component):
         data_ctr = Signal.like(self.control.payload.words)
         pattern = Signal.like(self.control.payload.pattern)
         pattern_ctr = Signal(range(3))
+        burst_ctr = Signal(range(16))
 
         pending_bursts = Signal(range(64))
         sent_burst = Signal()
@@ -42,6 +43,7 @@ class BufferClearer(Component):
                     pattern.eq(self.control.payload.pattern),
                     self.axi.write_address.qos.eq(self.control.payload.qos),
                     pattern_ctr.eq(0),
+                    burst_ctr.eq(0),
                 ]
         with m.Else():
             m.d.comb += self.axi.write_address.valid.eq(addr_ctr.any() & ~(pending_bursts.all()))
@@ -67,7 +69,6 @@ class BufferClearer(Component):
 
         # ==========================================
 
-        burst_ctr = Signal(range(16))
         write_data = Signal(64)
 
         m.d.comb += [
