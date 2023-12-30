@@ -26,16 +26,17 @@ class BufferClearerTest(unittest.TestCase):
         emulator = AxiEmulator(dut.axi, None, write)
 
         def control():
-            yield dut.control.payload.base_addr.eq(base_addr >> 7)
-            yield dut.control.payload.words.eq(len(data) // 8)
-            yield dut.control.payload.pattern.eq(0xCCBBAA)
-            yield dut.control.valid.eq(1)
-            yield
-            yield dut.control.valid.eq(0)
-
-            while (yield dut.control.ready):
+            for _ in range(5):
+                yield dut.control.payload.base_addr.eq(base_addr >> 7)
+                yield dut.control.payload.words.eq(len(data) // 8)
+                yield dut.control.payload.pattern.eq(0xCCBBAA)
+                yield dut.control.valid.eq(1)
                 yield
-            yield from wait_until(dut.control.ready, 1000)
+                yield dut.control.valid.eq(0)
+
+                while (yield dut.control.ready):
+                    yield
+                yield from wait_until(dut.control.ready, 1000)
 
         sim = Simulator(dut)
         emulator.add_to_sim(sim)
