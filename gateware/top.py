@@ -34,7 +34,7 @@ class Peripherals(Elaboratable):
     def elaborate(self, platform):
         m = Module()
 
-        m.submodules.video = video = self.video
+        m.submodules.video = video = DomainRenamer("pix")(self.video)
         m.submodules.rasterizer = rasterizer = DomainRenamer("raster")(self.rasterizer)
 
         m.submodules.axi2wb = axi2wb = axi_to_wishbone.Axi2Wishbone()
@@ -46,6 +46,13 @@ class Peripherals(Elaboratable):
             features={"err"},
         )
 
+        m.submodules.cdc_video = cdc_video = DomainRenamer({
+            "initiator": "sync",
+            "target": "pix",
+        })(WishboneCDC(video.bus.memory_map.addr_width - 2))
+        wiring.connect(m, cdc_video.t_bus, wiring.flipped(video.bus))
+        cdc_video.i_bus.memory_map = video.bus.memory_map
+
         m.submodules.cdc_raster = cdc_raster = DomainRenamer({
             "initiator": "sync",
             "target": "raster",
@@ -53,7 +60,7 @@ class Peripherals(Elaboratable):
         wiring.connect(m, cdc_raster.t_bus, wiring.flipped(rasterizer.bus))
         cdc_raster.i_bus.memory_map = rasterizer.bus.memory_map
 
-        decoder.add(video.bus, addr=0x4000_0000)
+        decoder.add(cdc_video.i_bus, addr=0x4000_0000)
         decoder.add(cdc_raster.i_bus, addr=0x4000_1000)
 
         wiring.connect(m, axi2wb.wishbone, wiring.flipped(decoder.bus))
@@ -197,7 +204,7 @@ class Top(Elaboratable):
         ]
 
         peripherals = Peripherals()
-        m.submodules.peripherals = DomainRenamer("pix")(peripherals)
+        m.submodules.peripherals = DomainRenamer("clk100")(peripherals)
         wiring.connect(m, peripherals.axi, ps7.axi_gp_m(0))
 
         wiring.connect(m, peripherals.video.axi, ps7.axi_hp(0))
@@ -253,6 +260,10 @@ set_false_path -to [get_cells peripherals/cdc_raster/req_fifo/rst_cdc/*]
 set_false_path -to [get_cells peripherals/cdc_raster/res_fifo/rst_cdc/*]
 set_false_path -to [get_cells peripherals/cdc_raster/req_fifo/_0__reg[*]]
 set_false_path -to [get_cells peripherals/cdc_raster/res_fifo/_0__reg[*]]
+set_false_path -to [get_cells peripherals/cdc_video/req_fifo/rst_cdc/*]
+set_false_path -to [get_cells peripherals/cdc_video/res_fifo/rst_cdc/*]
+set_false_path -to [get_cells peripherals/cdc_video/req_fifo/_0__reg[*]]
+set_false_path -to [get_cells peripherals/cdc_video/res_fifo/_0__reg[*]]
 """, script_after_read="""
 set_param general.maxThreads 12
 auto_detect_xpm
