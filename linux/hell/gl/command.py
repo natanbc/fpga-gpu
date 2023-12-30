@@ -21,13 +21,51 @@ class CommandBuffer:
         self._buffers[self._current_buffer].reset()
 
     async def draw_triangle(self, texture: int | None, v0: ScreenVertex, v1: ScreenVertex, v2: ScreenVertex):
-        assert texture is None
-        # No texture bits to set yet
-        await self.write_raw(0x01)
+        await self.write_raw(
+            0x01 |
+            ((1 if texture is not None else 0) << 6) |
+            ((texture if texture is not None else 0) << 7)
+        )
         for v in [v0, v1, v2]:
             bits = v.pack()
             await self.write_raw(bits & 0xFFFF_FFFF)
             await self.write_raw(bits >> 32)
+
+    async def load_texture(self, buffer: int, start_s: int, end_s: int, start_t: int, end_t: int, data: bytearray):
+        assert 0 <= buffer < 4
+
+        assert 0 <= start_s < 128
+        assert 0 <= end_s < 128
+        assert start_s <= end_s
+
+        assert 0 <= start_t < 128
+        assert 0 <= end_t < 128
+        assert start_t % 2 == 0
+        assert end_t % 2 == 1
+
+        s_high = start_s >> 6
+        assert s_high == (end_s >> 6)
+
+        start_t_half = start_t // 2
+        end_t_half = end_t // 2
+        assert start_t_half < end_t_half
+        t_high = start_t_half >> 5
+        assert t_high == (end_t_half >> 5)
+
+        expected_len = (end_s - start_s + 1) * ((end_t_half - start_t_half + 1) * 2) * 3
+        assert len(data) == expected_len
+
+        await self.write_raw(
+                0x02 |
+                (buffer << 6) |
+                (s_high << 8) |
+                ((start_s & 0b111_111) << 9) |
+                ((end_s & 0b111_111) << 15) |
+                (t_high << 21) |
+                ((start_t_half & 0b11_111) << 22) |
+                ((end_t_half & 0b11_111) << 27)
+        )
+        await self.write_slice(data)
 
     async def wait_idle(self):
         await self.write_raw(0x03)
@@ -45,6 +83,13 @@ class CommandBuffer:
     async def write_raw(self, word: int):
         await self._maybe_flip()
         self._buf().write(word)
+
+    async def write_slice(self, data: bytearray):
+        assert len(data) % 4 == 0
+        while len(data) > 0:
+            await self._maybe_flip()
+            written = self._buf().write_bytes(data)
+            data = data[written:]
 
     async def flush(self):
         buf = self._buf()
@@ -91,3 +136,15 @@ class Buffer:
         byte_pos = self._pos * 4
         self._map[byte_pos:byte_pos+4] = u32(val)
         self._pos += 1
+
+    def write_bytes(self, vals: bytearray) -> int:
+        assert len(vals) % 4 == 0
+        assert not self.full()
+
+        write = min(BUFFER_SIZE_WORDS - self._pos, len(vals) // 4)
+
+        byte_pos = self._pos * 4
+        self._map[byte_pos:byte_pos+write*4] = vals[:write*4]
+        self._pos += write
+
+        return write * 4

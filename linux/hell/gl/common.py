@@ -293,6 +293,18 @@ class GlCommon:
             lambda r, g, b: (int(r * 255), int(g * 255), int(b * 255)),
         )
 
+    def _transform_texture(
+            self,
+            vertex_buffer: Mapping[int, TextureVertex] | list[TextureVertex],
+            index_buffer: Iterable[int],
+    ) -> Iterable[ScreenVertex]:
+        yield from self._transform(
+            vertex_buffer,
+            index_buffer,
+            lambda v: (v.s, v.t, 0.0),
+            lambda s, t, _: (int((1.0 - s) * 255), int(t * 255), 0),
+        )
+
     async def _end_frame(self, draw: bool):
         if draw:
             self._dc.draw_frame(self._frame_buffers[self._frame_buffer_idx][1])
