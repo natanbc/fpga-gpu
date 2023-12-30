@@ -36,15 +36,20 @@ class WishboneCDC(Component):
 
     @property
     def signature(self):
-        wb = wishbone.Signature(
-            addr_width=self._addr_width,
-            data_width=self._data_width,
-            granularity=self._granularity,
-            features=self._features
-        )
         return Signature({
-            "i_bus": Out(wb),
-            "t_bus": Out(wb),
+            "i_bus": Out(wishbone.Signature(
+                addr_width=self._addr_width,
+                data_width=self._data_width,
+                granularity=self._granularity,
+                features=self._features | {"err"},
+            )),
+            "t_bus": Out(wishbone.Signature(
+                addr_width=self._addr_width,
+                data_width=self._data_width,
+                granularity=self._granularity,
+                features=self._features,
+            )),
+            "i_halt": In(1),  # Fail all requests, target domain is halted
         })
 
     def elaborate(self, platform):
@@ -72,15 +77,18 @@ class WishboneCDC(Component):
         ]
         if "err" in self._features:
             m.d.comb += [
-                self.i_bus.err.eq(res_fifo.r_rdy & i_res.err),
+                self.i_bus.err.eq((res_fifo.r_rdy & i_res.err) | self.i_halt),
                 self.i_bus.ack.eq(res_fifo.r_rdy & ~i_res.err)
             ]
         else:
-            m.d.comb += self.i_bus.ack.eq(res_fifo.r_rdy)
+            m.d.comb += [
+                self.i_bus.err.eq(self.i_halt),
+                self.i_bus.ack.eq(res_fifo.r_rdy)
+            ]
 
         i_request_in_flight = Signal()
         with m.If(self.i_bus.cyc & self.i_bus.stb):
-            m.d.comb += req_fifo.w_en.eq(~i_request_in_flight)
+            m.d.comb += req_fifo.w_en.eq(~self.i_halt & ~i_request_in_flight)
             with m.If(req_fifo.w_en & req_fifo.w_rdy):
                 m.d.initiator += i_request_in_flight.eq(1)
             with m.If(res_fifo.r_rdy):
